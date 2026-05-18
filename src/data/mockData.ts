@@ -212,20 +212,44 @@ export const SEDI = [
 // ── Unità organizzative (da colonna AU del MOD09 / AG del MOD10) ──────────
 
 export const ORG_UNITS_LIST = [
-  'IAFES', 'RAAS', 'REMHI', 'SOWAS', 'SEME', 'ECIP', 'TCT', 'ROFS',
-  'ESYDA', 'GOCO', 'CLIVAP', 'ICR', 'IESP', 'EIEE',
-  'HIGH PERFORMANCE COMPUTING CENTER',
-  'ADVANCED DIGITAL INNOVATION CENTER',
-  'ADVANCED TRAINING AND EDUCATION CENTER',
-  'FUND-RAISING', 'COMMUNICATION & SCIENCE OUTREACH',
-  'GENERAL COUNSEL', 'EXECUTIVE OFFICE', 'PEOPLE & CULTURE',
-  'LEGAL & CONTRACT ADVISORY', 'PUBLIC PROCUREMENT',
-  'INFORMATION TECHNOLOGY', 'ADMINISTRATION & FINANCE',
-  'PROJECT ADMINISTRATION & MANAGEMENT CONTROL', 'FACILITY MGMT & HSE',
-  'Integration of the planetary biogeochemical and industrial carbon cycle',
-  'Predicting socio-economic impacts of climate change',
-  'Global coasts as a new frontier',
-  'Integrating AI and ML in the modeling chain',
+  // ── Istituti ──────────────────────────────────────────
+  'ICR — Istituto per la Resilienza Climatica',
+  'IESP — Istituto Euro-Mediterraneo per le Previsioni e Scenari',
+  'EIEE — Istituto Economia e Impatti dell\'Energia',
+  'ASC — Adaptation and Mitigation Science Center',
+
+  // ── Divisioni Scientifiche ────────────────────────────
+  'IAFES — Impacts on Agriculture, Forests and Ecosystem Services',
+  'RAAS — Regional Analysis and Atmospheric Science',
+  'REMHI — Regional Models and geo-Hydrological Impacts',
+  'SOWAS — Sustainable Use of Water Resources in the Alpine Region',
+  'SEME — Sustainable Marine Ecosystems',
+  'ECIP — Economic Analysis of Climate Impacts and Policy',
+  'TCT — Transdisciplinary Themes in Climate Change',
+  'ROFS — Regional Ocean and Forecast System',
+  'ESYDA — Earth System Model Data and Analytics',
+  'GOCO — Global Carbon Cycle',
+  'CLIVAP — Climate Variability and Prediction',
+  'OPA — Ocean Physics and Assimilation',
+  'MEOM — Marine Ecosystems and Observations Methods',
+
+  // ── Centri Tecnici ────────────────────────────────────
+  'HPCC — High Performance Computing Center',
+  'ADIC — Advanced Digital Innovation Center',
+  'ATEC — Advanced Training and Education Center',
+
+  // ── Divisioni di Supporto ─────────────────────────────
+  'Executive Office',
+  'General Counsel',
+  'Legal & Contract Advisory',
+  'People & Culture',
+  'Administration & Finance',
+  'Public Procurement',
+  'Project Administration & Management Control',
+  'Information Technology',
+  'Facility Management & HSE',
+  'Communication & Science Outreach',
+  'Fund-Raising',
 ];
 
 // ── Legacy exports (mantenuti per compatibilità) ──────────────────────────
@@ -520,7 +544,7 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       vatNumber: '',
       engagement: 'Full Time',
       engagementPercent: 100,
-      workLocation: 'Bologna',
+      workLocation: 'Bologna - Viale C. Berti Pichat 6/2',
       isPNRR: false,
       project: '',
       workPackage: '',
@@ -542,7 +566,6 @@ export const MOCK_PROCESSES: ContractProcess[] = [
     ],
     documents: [
       { id: 'D1', name: 'CV Abdelhamid.pdf', type: 'cv', uploadedAt: '2025-04-11T09:30:00Z', uploadedBy: 'moaz.reyad@cmcc.it', required: true, status: 'verificato' },
-      { id: 'D2', name: 'MOD09_signed.pdf', type: 'mod09', uploadedAt: '2025-04-10T14:00:00Z', uploadedBy: 'laura.conti@cmcc.it', required: true, status: 'verificato' },
       { id: 'D3', name: 'Passaporto.pdf', type: 'documento-identita', uploadedAt: '2025-04-12T10:00:00Z', uploadedBy: 'moaz.reyad@cmcc.it', required: true, status: 'verificato' },
       { id: 'D4', name: 'Codice Fiscale.pdf', type: 'codice-fiscale', uploadedAt: '2025-04-12T10:05:00Z', uploadedBy: 'moaz.reyad@cmcc.it', required: true, status: 'verificato' },
     ],
@@ -608,7 +631,7 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       vatNumber: '',
       engagement: 'Full Time',
       engagementPercent: 100,
-      workLocation: 'Viterbo',
+      workLocation: 'Viterbo - Via Igino Garbini, 51',
       isPNRR: true,
       project: '',
       workPackage: '',
@@ -626,9 +649,9 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       { id: 'A1', role: 'rs', name: 'Prof. Andrea Bianchi', status: 'approved', timestamp: '2025-05-03T09:00:00Z' },
       { id: 'A2', role: 'direttore', name: 'Prof. Andrea Bianchi', status: 'approved', timestamp: '2025-05-05T11:00:00Z' },
       { id: 'A3', role: 'gru', name: 'Team GRU', status: 'pending' },
+      { id: 'A4', role: 'amm', name: 'Ufficio AMM', status: 'pending' },
     ],
     documents: [
-      { id: 'D1', name: 'MOD09_proroga.pdf', type: 'mod09', uploadedAt: '2025-05-02T10:30:00Z', uploadedBy: 'andrea.bianchi@cmcc.it', required: true, status: 'verificato' },
       { id: 'D2', name: 'Documento_Identità.pdf', type: 'documento-identita', required: true, status: 'caricato' },
     ],
     history: [
@@ -675,7 +698,7 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       startDate: '2025-07-01',
       endDate: '2027-06-30',
       mansione: 'Ricerca su modelli di economia dell\'ambiente e scenari climatici',
-      workLocation: 'Milano c/o Via Savona',
+      workLocation: 'Milano - Via Savona',
       qualifica: 'SR_SCI',
       ccnlLevel: '001',
       grossSalaryFT: 52000,
@@ -695,9 +718,9 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       { id: 'A1', role: 'rs', name: 'Prof. Marco Ferretti', status: 'approved', timestamp: '2025-05-09T10:00:00Z', notes: 'Profilo eccellente, risorsa strategica' },
       { id: 'A2', role: 'direttore', name: 'Prof. Marco Ferretti', status: 'pending' },
       { id: 'A3', role: 'gru', name: 'Team GRU', status: 'pending' },
+      { id: 'A4', role: 'amm', name: 'Ufficio AMM', status: 'pending' },
     ],
     documents: [
-      { id: 'D1', name: 'MOD10_trasformazione.pdf', type: 'mod10', uploadedAt: '2025-05-08T14:30:00Z', uploadedBy: 'marco.ferretti@cmcc.it', required: true, status: 'verificato' },
       { id: 'D2', name: 'CV_Alibei.pdf', type: 'cv', required: true, status: 'caricato' },
     ],
     history: [
@@ -755,7 +778,7 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       vatNumber: '',
       engagement: 'Full Time',
       engagementPercent: 100,
-      workLocation: 'Sassari',
+      workLocation: 'Sassari - Via De Nicola, 9',
       isPNRR: false,
       project: '',
       workPackage: '',
@@ -776,7 +799,6 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       { id: 'A4', role: 'amm', name: 'Ufficio AMM', status: 'approved', timestamp: '2025-05-16T11:00:00Z' },
     ],
     documents: [
-      { id: 'D1', name: 'MOD09_borsa.pdf', type: 'mod09', uploadedAt: '2025-05-12T09:00:00Z', uploadedBy: 'giulia.romano@cmcc.it', required: true, status: 'verificato' },
       { id: 'D2', name: 'CV_Esposito.pdf', type: 'cv', uploadedAt: '2025-05-12T09:10:00Z', uploadedBy: 'giulia.romano@cmcc.it', required: true, status: 'verificato' },
       { id: 'D3', name: 'Contratto_bozza.pdf', type: 'contratto', uploadedAt: '2025-05-16T11:30:00Z', uploadedBy: 'amm@cmcc.it', required: true, status: 'caricato' },
     ],
@@ -838,7 +860,7 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       vatNumber: '',
       engagement: 'Full Time',
       engagementPercent: 100,
-      workLocation: 'Viterbo',
+      workLocation: 'Viterbo - Via Igino Garbini, 51',
       isPNRR: false,
       project: '',
       workPackage: '',
@@ -852,7 +874,12 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       directorDivisionName: '',
       welfare: 0,
     },
-    approvals: [],
+    approvals: [
+      { id: 'A1', role: 'rs', name: 'Prof. Stefano Russo', status: 'pending' },
+      { id: 'A2', role: 'direttore', name: 'Prof. Stefano Russo', status: 'pending' },
+      { id: 'A3', role: 'gru', name: 'Team GRU', status: 'pending' },
+      { id: 'A4', role: 'amm', name: 'Ufficio AMM', status: 'pending' },
+    ],
     documents: [],
     history: [
       { id: 'H1', timestamp: '2025-05-16T15:00:00Z', action: 'Bozza creata', actor: 'Prof. Stefano Russo', actorRole: 'RS', toStatus: 'bozza' },
@@ -896,7 +923,7 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       startDate: '2025-06-01',
       endDate: '2026-05-31',
       mansione: 'Gestione e manutenzione infrastruttura HPC CMCC',
-      workLocation: 'Sede Legale (Lecce)',
+      workLocation: 'Lecce - Via Marco Biagi, 5',
       qualifica: 'TEC_MAN',
       ccnlLevel: '003',
       grossSalaryFT: 38000,
@@ -919,7 +946,6 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       { id: 'A4', role: 'amm', name: 'Ufficio AMM', status: 'approved', timestamp: '2025-05-14T11:00:00Z' },
     ],
     documents: [
-      { id: 'D1', name: 'MOD10_Vitale.pdf', type: 'mod10', required: true, status: 'verificato', uploadedAt: '2025-05-10T09:30:00Z', uploadedBy: 'carlo.gentile@cmcc.it' },
       { id: 'D2', name: 'CV_Vitale.pdf', type: 'cv', required: true, status: 'verificato', uploadedAt: '2025-05-10T09:35:00Z', uploadedBy: 'carlo.gentile@cmcc.it' },
       { id: 'D3', name: 'Contratto_firmato.pdf', type: 'contratto', required: true, status: 'verificato', uploadedAt: '2025-05-16T11:00:00Z', uploadedBy: 'amm@cmcc.it' },
     ],
@@ -932,7 +958,7 @@ export const MOCK_PROCESSES: ContractProcess[] = [
       { id: 'H6', timestamp: '2025-05-17T09:00:00Z', action: 'Contratto firmato', actor: 'Sistema', actorRole: 'Sistema', toStatus: 'anagrafica' },
     ],
     mod13Submitted: false,
-    mod138Required: false,
+    mod138Required: true,
     mod138Submitted: false,
     mod102Required: false,
     mod102Submitted: false,

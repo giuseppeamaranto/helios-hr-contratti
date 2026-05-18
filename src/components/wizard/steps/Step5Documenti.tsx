@@ -1,3 +1,4 @@
+import { RECRUITING_CANDIDATES } from '../../../data/mockData';
 import type { ProcessDocument } from '../../../types';
 import type { WizardState } from '../ContractWizard';
 
@@ -6,23 +7,12 @@ interface Props {
   onChange: (updates: Partial<WizardState>) => void;
 }
 
-const NON_SUBORDINATO_TYPES = ['cococo', 'borsa-studio', 'tirocinio', 'consulenza-it', 'consulenza-es'];
-
 export function getRequiredDocs(
   contractType: string,
   isNewResource: boolean,
   isEU: boolean
 ): ProcessDocument[] {
-  const modLabel = NON_SUBORDINATO_TYPES.includes(contractType) ? 'MOD09' : 'MOD10';
-
   const docs: ProcessDocument[] = [
-    {
-      id: 'd1',
-      name: `Modulo ${modLabel} — Richiesta Contratto`,
-      type: 'modulo-richiesta',
-      required: true,
-      status: 'attesa',
-    },
     {
       id: 'd2',
       name: 'Curriculum Vitae aggiornato',
@@ -65,26 +55,6 @@ export function getRequiredDocs(
     }
   }
 
-  if (contractType === 'subordinato-td' || contractType === 'subordinato-ti') {
-    docs.push({
-      id: 'd7',
-      name: 'Dichiarazione detrazioni (MOD14)',
-      type: 'mod14',
-      required: true,
-      status: 'attesa',
-    });
-  }
-
-  if (contractType === 'cococo') {
-    docs.push({
-      id: 'd8',
-      name: 'Informativa lavoratori CoCoCo (MOD102)',
-      type: 'mod102',
-      required: true,
-      status: 'attesa',
-    });
-  }
-
   return docs;
 }
 
@@ -92,9 +62,6 @@ function docIcon(type: string): string {
   switch (type) {
     case 'documento-identita': return '🪪';
     case 'codice-fiscale':     return '🪪';
-    case 'modulo-richiesta':   return '📋';
-    case 'mod14':              return '📋';
-    case 'mod102':             return '📋';
     case 'cv':                 return '📄';
     case 'permesso-soggiorno': return '🛂';
     case 'visto':              return '✈️';
@@ -114,7 +81,12 @@ function docStatusBadge(status: ProcessDocument['status']) {
 }
 
 export function Step5Documenti({ state, onChange }: Props) {
-  const isEU = state.resource?.isEU ?? true;
+  // Determine EU status: use existing resource's flag if available,
+  // or the recruiting candidate's flag when coming from ATS, otherwise assume EU.
+  const recruitingCandidate = state.fromRecruiting && state.recruitingCandidateId
+    ? RECRUITING_CANDIDATES.find(c => c.id === state.recruitingCandidateId) ?? null
+    : null;
+  const isEU = state.resource?.isEU ?? recruitingCandidate?.isEU ?? true;
   const requiredDocs = getRequiredDocs(state.contractType, state.isNewResource, isEU);
 
   // Inizializza documenti se vuoti
@@ -153,9 +125,9 @@ export function Step5Documenti({ state, onChange }: Props) {
           <i className="bi bi-info-circle-fill" style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
             <div style={{ fontWeight: 700, marginBottom: 4 }}>Gestione Documenti</div>
-            I documenti elencati di seguito sono richiesti per il tipo di contratto selezionato.
-            In questa fase puoi simulare il caricamento per indicare la disponibilità dei documenti.
-            Il caricamento definitivo avverrà attraverso il portale GRU.
+            Allega i documenti di supporto richiesti per il tipo di contratto selezionato.
+            Il modulo MOD09/MOD10 è generato automaticamente dalla compilazione del wizard.
+            I moduli MOD13, MOD138, MOD14 e MOD102 vengono gestiti nelle fasi successive del processo.
           </div>
         </div>
       </div>

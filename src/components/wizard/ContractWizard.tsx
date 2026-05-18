@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CURRENT_USER } from '../../data/mockData';
+import { CURRENT_USER, RECRUITING_CANDIDATES } from '../../data/mockData';
 import type {
   ContractCategory,
   ContractType,
@@ -124,7 +124,10 @@ function buildProcess(
   const id = `PROC-${new Date().getFullYear()}-${String(existingProcesses.length + 1).padStart(3, '0')}`;
   const status = asBozza ? 'bozza' : 'approvazione-rs';
 
-  const isEU = state.resource?.isEU ?? true;
+  const recruitingCandidate = state.fromRecruiting && state.recruitingCandidateId
+    ? RECRUITING_CANDIDATES.find(c => c.id === state.recruitingCandidateId) ?? null
+    : null;
+  const isEU = state.resource?.isEU ?? recruitingCandidate?.isEU ?? true;
   const docs =
     state.documents.length > 0
       ? state.documents

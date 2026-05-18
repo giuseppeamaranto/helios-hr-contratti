@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { OPERATION_LABELS, CONTRACT_TYPE_LABELS } from '../../../data/mockData';
+import {
+  OPERATION_LABELS,
+  CONTRACT_TYPE_LABELS,
+  MOD09_CONTRACT_TYPES,
+  MOD10_CONTRACT_TYPES,
+  CCNL_LEVELS_TERZ,
+  QUALIFICHE_RANGES,
+} from '../../../data/mockData';
 import type { WizardState } from '../ContractWizard';
 
 interface Props {
@@ -81,15 +88,27 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
         </div>
         <div className="summary-row">
           <div className="summary-key">Tipo Risorsa</div>
-          <div className="summary-value">
+          <div className="summary-value" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {state.isNewResource
               ? <span className="tag tag-amber">Nuova Risorsa</span>
               : <span className="tag tag-green">Risorsa Esistente</span>
             }
+            {state.fromRecruiting && (
+              <span className="tag tag-green" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <i className="bi bi-broadcast" style={{ fontSize: 10 }} />
+                Da Recruiting
+              </span>
+            )}
           </div>
         </div>
         <SummaryRow label="Nome Completo" value={resourceName} />
         <SummaryRow label="Email"         value={resourceEmail} />
+        {state.fromRecruiting && state.jobCallCode && (
+          <SummaryRow label="Job Call" value={`${state.jobCallCode}${state.jobCallTitle ? ` — ${state.jobCallTitle}` : ''}`} />
+        )}
+        {state.fromRecruiting && state.recruitingCandidateId && (
+          <SummaryRow label="ID Candidato" value={state.recruitingCandidateId} />
+        )}
         {!state.isNewResource && state.resource && (
           <>
             <SummaryRow label="Codice Fiscale" value={state.resource.cf} />
@@ -110,7 +129,7 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
         <div className="summary-row">
           <div className="summary-key">Modulo</div>
           <div className="summary-value">
-            <span className="tag tag-blue">{modType}</span>
+            <span className={state.modType === 'mod10' ? 'tag tag-purple' : 'tag tag-blue'}>{modType}</span>
           </div>
         </div>
       </div>
@@ -122,7 +141,22 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
             <i className="bi bi-file-earmark-check" />
             Dettaglio Contratto MOD09
           </div>
-          <SummaryRow label="Tipo contratto"       value={state.mod09.contractTypeMod09} />
+          <SummaryRow
+            label="Tipo contratto"
+            value={
+              state.mod09.contractTypeMod09
+                ? MOD09_CONTRACT_TYPES.find(c => c.code === state.mod09.contractTypeMod09)?.label ?? state.mod09.contractTypeMod09
+                : undefined
+            }
+          />
+          <SummaryRow
+            label="Qualifica"
+            value={
+              state.mod09.qualifica
+                ? QUALIFICHE_RANGES.find(q => q.code === state.mod09.qualifica)?.label ?? state.mod09.qualifica
+                : undefined
+            }
+          />
           <SummaryRow label="Oggetto prestazione"  value={state.mod09.activityObject} />
           <SummaryRow label="Deliverable"          value={state.mod09.deliverables} />
           <SummaryRow label="Data Inizio"          value={state.mod09.startDate} />
@@ -130,17 +164,38 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
           <SummaryRow
             label="Compenso Lordo Mensile"
             value={state.mod09.grossCompensation
-              ? `€ ${state.mod09.grossCompensation.toLocaleString('it-IT')}`
+              ? `€ ${state.mod09.grossCompensation.toLocaleString('it-IT')}/mese`
               : undefined}
+          />
+          <SummaryRow
+            label="Totale Lordo Stimato"
+            value={
+              state.mod09.grossCompensation && state.mod09.numRate
+                ? `€ ${(state.mod09.grossCompensation * state.mod09.numRate).toLocaleString('it-IT')} (${state.mod09.numRate} rate)`
+                : undefined
+            }
           />
           <SummaryRow
             label="Modalità Pagamento"
             value={state.mod09.paymentSchedule}
           />
           <SummaryRow label="P.IVA"            value={state.mod09.vatRequired ? `Sì — ${state.mod09.vatNumber || 'non indicata'}` : 'No'} />
+          <SummaryRow label="Impegno"          value={state.mod09.engagement} />
           <SummaryRow label="Luogo di Lavoro"  value={state.mod09.workLocation} />
           <SummaryRow label="Strumenti CMCC"   value={state.mod09.tools} />
           <SummaryRow label="Report a"         value={state.mod09.reportTo} />
+          <SummaryRow label="Direttore UO"     value={state.mod09.directorName} />
+          {state.mod09.directorDivisionName && (
+            <SummaryRow label="Direttore Divisione" value={state.mod09.directorDivisionName} />
+          )}
+          {state.mod09.isPNRR && (
+            <div className="summary-row">
+              <div className="summary-key">Progetto PNRR</div>
+              <div className="summary-value">
+                <span className="tag tag-amber">Sì — PNRR</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -151,10 +206,31 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
             <i className="bi bi-file-earmark-check" />
             Dettaglio Contratto MOD10
           </div>
-          <SummaryRow label="Tipo Contratto"      value={state.mod10.contractTypeMod10} />
-          <SummaryRow label="Livello CCNL"       value={state.mod10.ccnlLevel} />
+          <SummaryRow
+            label="Tipo Contratto"
+            value={
+              state.mod10.contractTypeMod10
+                ? MOD10_CONTRACT_TYPES.find(c => c.code === state.mod10.contractTypeMod10)?.label ?? state.mod10.contractTypeMod10
+                : undefined
+            }
+          />
+          <SummaryRow
+            label="Livello CCNL"
+            value={
+              state.mod10.ccnlLevel
+                ? CCNL_LEVELS_TERZ.find(l => l.code === state.mod10.ccnlLevel)?.label ?? state.mod10.ccnlLevel
+                : undefined
+            }
+          />
           <SummaryRow label="Mansione"           value={state.mod10.mansione} />
-          <SummaryRow label="Qualifica"          value={state.mod10.qualifica} />
+          <SummaryRow
+            label="Qualifica"
+            value={
+              state.mod10.qualifica
+                ? QUALIFICHE_RANGES.find(q => q.code === state.mod10.qualifica)?.label ?? state.mod10.qualifica
+                : undefined
+            }
+          />
           <SummaryRow
             label="Lordo FT Annuale"
             value={state.mod10.grossSalaryFT ? `€ ${state.mod10.grossSalaryFT.toLocaleString('it-IT')} / anno` : undefined}
@@ -171,10 +247,15 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
           <SummaryRow label="Data Inizio"        value={state.mod10.startDate} />
           <SummaryRow
             label="Data Fine"
-            value={state.mod10.endDate ?? '—'}
+            value={state.mod10.endDate || 'Tempo Indeterminato'}
           />
           <SummaryRow label="Descrizione Att."   value={state.mod10.activityDescription} />
           <SummaryRow label="Luogo di Lavoro"    value={state.mod10.workLocation} />
+          <SummaryRow label="Direttore / Head"   value={state.mod10.directorName} />
+          <SummaryRow
+            label="Welfare"
+            value={state.mod10.welfare ? `€ ${state.mod10.welfare.toLocaleString('it-IT')}/anno` : undefined}
+          />
           <SummaryRow
             label="Expatriate"
             value={state.mod10.isExpat ? `Sì — ${state.mod10.expatCountry || '?'}` : 'No'}

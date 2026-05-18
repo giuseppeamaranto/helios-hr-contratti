@@ -309,23 +309,42 @@ export function Step4Mod10({ state, onChange }: Props) {
             <option value="">— Seleziona qualifica —</option>
             {QUALIFICHE_RANGES.map(q => (
               <option key={q.code} value={q.code}>
-                {q.label}
+                {q.label}{' '}
+                {q.minLordo !== null && q.maxLordo !== null
+                  ? `— €${(q.minLordo / 1000).toFixed(0)}k–€${(q.maxLordo / 1000).toFixed(0)}k`
+                  : q.minLordo !== null
+                  ? `— ≥€${(q.minLordo / 1000).toFixed(0)}k`
+                  : q.maxLordo !== null
+                  ? `— ≥€${(q.maxLordo / 1000).toFixed(0)}k`
+                  : ''}
               </option>
             ))}
           </select>
-          {selectedQualifica && (
-            <div className="alert-cmcc info mt-2" style={{ fontSize: 12 }}>
-              <i className="bi bi-graph-up me-1" />
-              <strong>Range lordo:</strong>{' '}
-              {selectedQualifica.minLordo !== null
-                ? `€${selectedQualifica.minLordo.toLocaleString('it-IT')}`
-                : 'n.d.'}
-              {' '}–{' '}
-              {selectedQualifica.maxLordo !== null
-                ? `€${selectedQualifica.maxLordo.toLocaleString('it-IT')}/anno`
-                : 'nessun massimo'}
-            </div>
-          )}
+          {mod10.qualifica && (() => {
+            const q = QUALIFICHE_RANGES.find(r => r.code === mod10.qualifica);
+            if (!q) return null;
+            return (
+              <div style={{
+                marginTop: 6, padding: '8px 12px', borderRadius: 6,
+                background: '#f0f7ff', border: '1px solid #bfdbfe', fontSize: 12,
+              }}>
+                <span style={{ color: '#1e40af', fontWeight: 600 }}>Range lordo annuo: </span>
+                {q.minLordo !== null && q.maxLordo !== null
+                  ? `€ ${q.minLordo.toLocaleString('it-IT')} – € ${q.maxLordo.toLocaleString('it-IT')} / anno`
+                  : q.minLordo !== null
+                  ? `min. € ${q.minLordo.toLocaleString('it-IT')} / anno`
+                  : q.maxLordo !== null
+                  ? `min. € ${q.maxLordo.toLocaleString('it-IT')} / anno`
+                  : 'n.d.'}
+                {q.rateOrariaMin !== null && (
+                  <span style={{ marginLeft: 12, color: '#64748b' }}>
+                    (€ {q.rateOrariaMin.toFixed(2)}
+                    {q.rateOrariaMax !== null ? ` – € ${q.rateOrariaMax.toFixed(2)}` : '+'} / ora)
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="col-md-6">
@@ -381,6 +400,11 @@ export function Step4Mod10({ state, onChange }: Props) {
             />
             <span className="input-group-text">/anno</span>
           </div>
+          {(mod10.grossSalaryFT ?? 0) > 0 && (
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+              ≈ € {((mod10.grossSalaryFT ?? 0) / 14).toLocaleString('it-IT', { maximumFractionDigits: 0 })} / mese (14 mensilità)
+            </div>
+          )}
         </div>
 
         <div className="col-md-6 d-flex align-items-end">

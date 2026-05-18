@@ -381,10 +381,21 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
       case 'anagrafica':
         if (!allModsSubmitted && !isAdmin) return null;
         return {
-          title: 'Caricamento Zucchetti',
+          title: 'Avanza ad Anagrafica → Zucchetti',
           desc: allModsSubmitted
-            ? 'Tutti i moduli sono stati inviati. Procedi con il caricamento su Zucchetti.'
-            : `Caricamento forzato su Zucchetti.${adminDesc}`,
+            ? 'Tutti i moduli sono stati inviati. Avanza il processo alla fase Zucchetti.'
+            : `Avanzamento forzato alla fase Zucchetti.${adminDesc}`,
+          canReject: false,
+          onApprove: () => {
+            advanceStatus('zucchetti', isAdmin ? actor : 'Ufficio AMM', 'Fase anagrafica completata — avanzamento a Zucchetti', stepModalNotes || undefined);
+            closeModal();
+          },
+        };
+      case 'zucchetti':
+        if (!isAdmin) return null;
+        return {
+          title: 'Caricamento Zucchetti',
+          desc: `Carica i dati su Zucchetti e completa il processo.${adminDesc}`,
           canReject: false,
           onApprove: () => { handleZucchetti(); closeModal(); },
         };
@@ -464,7 +475,7 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
             {currentRole === 'gru' && proc.status === 'elaborazione-gru' && (
               <button
                 className="btn btn-cmcc-primary"
-                onClick={() => advanceStatus('contratto-preparazione', 'Team GRU', 'Elaborazione GRU completata')}
+                onClick={() => advanceStatus('lettera-presentazione', 'Team GRU', 'Elaborazione GRU completata')}
               >
                 <i className="bi bi-gear me-2" />
                 Completa Elaborazione
@@ -480,6 +491,15 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
               </button>
             )}
             {currentRole === 'amm' && proc.status === 'anagrafica' && allModsSubmitted && (
+              <button
+                className="btn btn-cmcc-primary"
+                onClick={() => advanceStatus('zucchetti', 'Ufficio AMM', 'Fase anagrafica completata — avanzamento a Zucchetti')}
+              >
+                <i className="bi bi-arrow-right-circle me-2" />
+                Avanza a Zucchetti
+              </button>
+            )}
+            {currentRole === 'amm' && proc.status === 'zucchetti' && (
               <button className="btn btn-cmcc-success" onClick={handleZucchetti}>
                 <i className="bi bi-upload me-2" />
                 Carica su Zucchetti
@@ -532,13 +552,14 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
             const isClickable = !!clickData;
 
             return (
-              <div key={step.status} className={`step-item${stepState ? ' ' + stepState : ''}`}>
-                <div
-                  className={`step-circle${isClickable ? ' step-circle-clickable' : ''}`}
-                  title={isClickable ? `Clicca per: ${clickData.title}` : undefined}
-                  onClick={isClickable ? () => setStepModal(step.status as ProcessStatus) : undefined}
-                  style={isClickable ? { cursor: 'pointer' } : undefined}
-                >
+              <div
+                key={step.status}
+                className={`step-item${stepState ? ' ' + stepState : ''}${isClickable ? ' step-item-clickable' : ''}`}
+                onClick={isClickable ? () => setStepModal(step.status as ProcessStatus) : undefined}
+                style={isClickable ? { cursor: 'pointer' } : undefined}
+                title={isClickable ? `Azione: ${clickData!.title}` : undefined}
+              >
+                <div className={`step-circle${isClickable ? ' step-circle-clickable' : ''}`}>
                   {stepState === 'done'
                     ? <i className="bi bi-check" />
                     : isClickable
@@ -1047,10 +1068,14 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           {allModsSubmitted && currentRole === 'amm' && (
             <div className="alert-cmcc success mt-3">
               <i className="bi bi-check-circle-fill me-2" />
-              Tutti i moduli sono stati inviati. Puoi procedere con il caricamento su Zucchetti.
-              <button className="btn btn-cmcc-success ms-3" style={{ fontSize: 13 }} onClick={handleZucchetti}>
-                <i className="bi bi-upload me-2" />
-                Carica su Zucchetti
+              Tutti i moduli sono stati inviati. Puoi avanzare il processo alla fase Zucchetti.
+              <button
+                className="btn btn-cmcc-primary ms-3"
+                style={{ fontSize: 13 }}
+                onClick={() => advanceStatus('zucchetti', 'Ufficio AMM', 'Fase anagrafica completata — avanzamento a Zucchetti')}
+              >
+                <i className="bi bi-arrow-right-circle me-2" />
+                Avanza a Zucchetti
               </button>
             </div>
           )}
@@ -1070,7 +1095,7 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
         return (
           <div
             style={{
-              position: 'fixed', inset: 0, zIndex: 1050,
+              position: 'fixed', inset: 0, zIndex: 9999,
               background: 'rgba(15,23,42,0.45)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
@@ -1135,7 +1160,7 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
                   onClick={data.onApprove}
                 >
                   <i className="bi bi-check-lg me-2" />
-                  {data.canReject ? 'Approva' : data.title}
+                  {data.canReject ? 'Approva' : 'Conferma'}
                 </button>
               </div>
             </div>

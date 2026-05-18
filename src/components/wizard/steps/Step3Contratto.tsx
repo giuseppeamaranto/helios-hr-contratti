@@ -123,7 +123,10 @@ export function Step3Contratto({ state, onChange }: Props) {
             <div>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>
                 Modulo richiesto:{' '}
-                <span className="tag tag-blue" style={{ verticalAlign: 'middle' }}>
+                <span
+                  className={TYPE_INFO[state.contractType].mod === 'MOD10' ? 'tag tag-purple' : 'tag tag-blue'}
+                  style={{ verticalAlign: 'middle' }}
+                >
                   {TYPE_INFO[state.contractType].mod}
                 </span>
               </div>
@@ -145,7 +148,7 @@ export function Step3Contratto({ state, onChange }: Props) {
             {[...NON_SUBORDINATO_TYPES, ...SUBORDINATO_TYPES].find(t => t.value === state.contractType)?.label}
           </span>
           <i className="bi bi-chevron-right" style={{ fontSize: 10, color: '#94a3b8' }} />
-          <span className="tag tag-purple">
+          <span className={state.modType === 'mod10' ? 'tag tag-purple' : 'tag tag-blue'}>
             {state.modType?.toUpperCase()}
           </span>
         </div>
