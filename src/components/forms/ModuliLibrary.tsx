@@ -40,11 +40,14 @@ const MODULI: Modulo[] = [
     description: 'Modulo per richiesta di collaborazione CoCoCo, borse di studio, tirocini e consulenze.',
     fieldCount: 15,
     sections: [
-      { title: 'Dati Richiedente', fields: ['Responsabile di struttura', 'Unità', 'Centro di costo', 'Progetto / Codice progetto'] },
+      { title: 'Dati Richiedente', fields: ['Responsabile di struttura', 'Unità Organizzativa', 'Centro di costo', 'Progetto / Codice progetto'] },
       { title: 'Tipo Collaborazione', fields: ['Tipologia (CoCoCo / Borsa / Tirocinio / Consulenza)', 'Nominativo collaboratore', 'Codice fiscale', 'Partita IVA (se applicabile)'] },
+      { title: 'Qualifica e Impegno', fields: ['Qualifica', 'Modalità selezione', 'Lingua contratto', 'Impegno (Full Time / Parziale)', '% impegno (se parziale)'] },
       { title: 'Oggetto Prestazione', fields: ['Descrizione attività', 'Deliverable attesi', 'Riferisce a'] },
-      { title: 'Durata e Compenso', fields: ['Data inizio', 'Data fine', 'Compenso lordo mensile/totale', 'Modalità pagamento'] },
+      { title: 'Durata e Compenso', fields: ['Data inizio', 'Data fine', 'Compenso lordo mensile', 'Modalità pagamento', 'Numero rate', 'Aliquota (piena/agevolata)', 'Welfare (€)'] },
+      { title: 'Imputazione Progetto', fields: ['Work Package', 'Progetto di Allocazione', 'Progetto PNRR'] },
       { title: 'Modalità Esecuzione', fields: ['Luogo svolgimento', 'Strumenti forniti', 'Esclusività'] },
+      { title: 'Firme e Responsabile', fields: ['Nome Direttore Unità Organizzativa', 'Nome Direttore di Divisione / Dipartimento'] },
     ],
   },
   {
@@ -55,11 +58,13 @@ const MODULI: Modulo[] = [
     description: 'Modulo per assunzione a tempo determinato o indeterminato (Terziario Confcommercio).',
     fieldCount: 18,
     sections: [
-      { title: 'Inquadramento', fields: ['CCNL applicato', 'Livello', 'Qualifica professionale', 'Profilo'] },
-      { title: 'Dati Economici', fields: ['RAL (€/anno)', 'Part-time %', 'Eventuali benefit'] },
-      { title: 'Durata', fields: ['Data inizio', 'Data fine', 'Tempo indeterminato (sì/no)'] },
-      { title: 'Attività', fields: ['Descrizione mansioni', 'Luogo lavoro', 'Distaccato estero (sì/no)', 'Paese estero'] },
-      { title: 'Note', fields: ['Note aggiuntive', 'Documenti allegati'] },
+      { title: 'Tipo Contratto', fields: ['Tipo contratto', 'È un rinnovo?'] },
+      { title: 'Mansione e Inquadramento', fields: ['Mansione', 'Qualifica', 'Livello CCNL'] },
+      { title: 'Dati Economici', fields: ['Lordo FT annuale (€)', '% Part Time (0 = FT)', 'Welfare (€/anno)', 'Fondi aggiuntivi (€)'] },
+      { title: 'Date', fields: ['Data inizio', 'Data fine'] },
+      { title: 'Struttura Organizzativa', fields: ['Sede', 'Unità Organizzativa', 'Centro di Costo', 'Descrizione attività'] },
+      { title: 'Dettagli Aggiuntivi', fields: ['Assicurazione viaggio', 'Expatriate', 'Paese estero (se expatriate)'] },
+      { title: 'Direttore', fields: ['Nome Direttore / Responsabile'] },
     ],
   },
   {
@@ -131,16 +136,38 @@ const MODULI: Modulo[] = [
 ];
 
 // ── Modal: MOD09 ──────────────────────────────────────────────────────────────
+const ORG_UNITS_MOD09 = [
+  'IAFES', 'RAAS', 'REMHI', 'SOWAS', 'SEME', 'ECIP', 'TCT', 'ROFS',
+  'ESYDA', 'GOCO', 'CLIVAP', 'ICR', 'IESP', 'EIEE',
+  'HIGH PERFORMANCE COMPUTING CENTER',
+  'ADVANCED DIGITAL INNOVATION CENTER',
+  'ADVANCED TRAINING AND EDUCATION CENTER',
+  'FUND-RAISING', 'COMMUNICATION & SCIENCE OUTREACH',
+  'GENERAL COUNSEL', 'EXECUTIVE OFFICE', 'PEOPLE & CULTURE',
+  'LEGAL & CONTRACT ADVISORY', 'PUBLIC PROCUREMENT',
+  'INFORMATION TECHNOLOGY', 'ADMINISTRATION & FINANCE',
+  'PROJECT ADMINISTRATION & MANAGEMENT CONTROL', 'FACILITY MGMT & HSE',
+  'Integration of the planetary biogeochemical and industrial carbon cycle',
+  'Predicting socio-economic impacts of climate change',
+  'Global coasts as a new frontier',
+  'Integrating AI and ML in the modeling chain',
+];
+
 function ModalMOD09({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
-    rs: '', unit: '', costCenter: '', project: '',
+    rs: '', orgUnit: '', unit: '', costCenter: '', project: '',
     collabType: '', name: '', cf: '', piva: '',
+    qualifica: '', selectionMode: '', language: 'Italiano',
+    engagement: 'Full Time', engagementPercent: 50,
     activityDesc: '', deliverables: '', reportTo: '',
     startDate: '', endDate: '', compensation: '', paymentMode: 'mensile',
+    aliquota: 'piena', numRate: '', welfare: '',
+    workPackage: '', allocationProject: '', isPNRR: false,
     location: '', tools: '', exclusive: false,
+    directorName: '', directorDivision: '',
   });
 
-  function update(field: string, value: string | boolean) {
+  function update(field: string, value: string | boolean | number) {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
@@ -164,15 +191,15 @@ function ModalMOD09({ onClose }: { onClose: () => void }) {
                 <input className="form-control" value={form.rs} onChange={e => update('rs', e.target.value)} placeholder="Es. Prof. Andrea Bianchi" />
               </div>
               <div className="col-md-6">
-                <label className="form-label">Unità</label>
-                <select className="form-select" value={form.unit} onChange={e => update('unit', e.target.value)}>
+                <label className="form-label">Unità Organizzativa</label>
+                <select className="form-select" value={form.orgUnit} onChange={e => update('orgUnit', e.target.value)}>
                   <option value="">Seleziona...</option>
-                  {['ICR','IESP','EIEE','IAFES','REMHI','ASC'].map(u => <option key={u}>{u}</option>)}
+                  {ORG_UNITS_MOD09.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
               <div className="col-md-6">
                 <label className="form-label">Centro di costo</label>
-                <input className="form-control" value={form.costCenter} onChange={e => update('costCenter', e.target.value)} placeholder="Es. EU-HA01" />
+                <input className="form-control" value={form.costCenter} onChange={e => update('costCenter', e.target.value)} placeholder="Es. 23101100 - ICR" />
               </div>
               <div className="col-md-6">
                 <label className="form-label">Progetto / Codice progetto</label>
@@ -209,6 +236,43 @@ function ModalMOD09({ onClose }: { onClose: () => void }) {
               </div>
             </div>
           </div>
+          {/* Qualifica e Impegno */}
+          <div className="summary-section">
+            <div className="summary-section-header">Qualifica e Impegno</div>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label">Qualifica</label>
+                <select className="form-select" value={form.qualifica} onChange={e => update('qualifica', e.target.value)}>
+                  <option value="">Seleziona...</option>
+                  {['Principal Scientist','Senior Scientist','Scientist','Junior Scientist','Post Doc','Post Degree','Principal Associate Scientist','Senior Associate Scientist','Associate Scientist','Junior Associate Scientist','Principal Scientific Manager','Senior Scientific Manager','Junior Scientific Manager','Personale Tecnico-Manageriale'].map(q => <option key={q} value={q}>{q}</option>)}
+                </select>
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Modalità di selezione</label>
+                <input className="form-control" value={form.selectionMode} onChange={e => update('selectionMode', e.target.value)} placeholder="Es. Selezione pubblica, Chiamata diretta..." />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Lingua contratto</label>
+                <select className="form-select" value={form.language} onChange={e => update('language', e.target.value)}>
+                  <option value="Italiano">Italiano</option>
+                  <option value="Inglese">Inglese</option>
+                </select>
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Impegno</label>
+                <select className="form-select" value={form.engagement} onChange={e => update('engagement', e.target.value)}>
+                  <option value="Full Time">Full Time</option>
+                  <option value="Parziale">Parziale</option>
+                </select>
+              </div>
+              {form.engagement === 'Parziale' && (
+                <div className="col-md-4">
+                  <label className="form-label">% Impegno</label>
+                  <input type="number" className="form-control" min={10} max={90} step={5} value={form.engagementPercent} onChange={e => update('engagementPercent', parseInt(e.target.value) || 50)} />
+                </div>
+              )}
+            </div>
+          </div>
           {/* Oggetto */}
           <div className="summary-section">
             <div className="summary-section-header">Oggetto Prestazione</div>
@@ -240,7 +304,7 @@ function ModalMOD09({ onClose }: { onClose: () => void }) {
                 <input type="date" className="form-control" value={form.endDate} onChange={e => update('endDate', e.target.value)} />
               </div>
               <div className="col-md-3">
-                <label className="form-label">Compenso lordo (€)</label>
+                <label className="form-label">Compenso lordo mensile (€)</label>
                 <input type="number" className="form-control" value={form.compensation} onChange={e => update('compensation', e.target.value)} placeholder="2800" min={0} />
               </div>
               <div className="col-md-3">
@@ -250,6 +314,41 @@ function ModalMOD09({ onClose }: { onClose: () => void }) {
                   <option value="trimestrale">Trimestrale</option>
                   <option value="saldo">A saldo</option>
                 </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label">Aliquota contributiva</label>
+                <select className="form-select" value={form.aliquota} onChange={e => update('aliquota', e.target.value)}>
+                  <option value="piena">Piena</option>
+                  <option value="agevolata">Agevolata</option>
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label">Numero rate / mensilità</label>
+                <input type="number" className="form-control" min={1} step={1} value={form.numRate} onChange={e => update('numRate', e.target.value)} placeholder="Es. 12" />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label">Welfare (€)</label>
+                <input type="number" className="form-control" min={0} step={100} value={form.welfare} onChange={e => update('welfare', e.target.value)} placeholder="0" />
+              </div>
+            </div>
+          </div>
+          {/* Imputazione Progetto */}
+          <div className="summary-section">
+            <div className="summary-section-header">Imputazione Progetto</div>
+            <div className="row g-3">
+              <div className="col-md-4">
+                <label className="form-label">Work Package</label>
+                <input className="form-control" value={form.workPackage} onChange={e => update('workPackage', e.target.value)} placeholder="Es. WP3 — Analisi modellistica" />
+              </div>
+              <div className="col-md-5">
+                <label className="form-label">Progetto di Allocazione</label>
+                <input className="form-control" value={form.allocationProject} onChange={e => update('allocationProject', e.target.value)} placeholder="Codice progetto per rendiconto" />
+              </div>
+              <div className="col-md-3 d-flex align-items-end">
+                <div className="form-check mb-2">
+                  <input type="checkbox" className="form-check-input" id="isPNRR09" checked={form.isPNRR} onChange={e => update('isPNRR', e.target.checked)} />
+                  <label className="form-check-label" htmlFor="isPNRR09">Progetto PNRR</label>
+                </div>
               </div>
             </div>
           </div>
@@ -277,6 +376,20 @@ function ModalMOD09({ onClose }: { onClose: () => void }) {
                   />
                   <label className="form-check-label" htmlFor="exclusive09">Rapporto esclusivo</label>
                 </div>
+              </div>
+            </div>
+          </div>
+          {/* Firme e Responsabile */}
+          <div className="summary-section">
+            <div className="summary-section-header">Firme e Responsabile</div>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label">Nome Direttore Unità Organizzativa</label>
+                <input className="form-control" value={form.directorName} onChange={e => update('directorName', e.target.value)} placeholder="Nome e cognome (per firma)" />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Nome Direttore di Divisione / Dipartimento</label>
+                <input className="form-control" value={form.directorDivision} onChange={e => update('directorDivision', e.target.value)} placeholder="Nome e cognome (opzionale)" />
               </div>
             </div>
           </div>
@@ -729,7 +842,207 @@ function ModalMOD102({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Generic modal for MOD10 / MOD10BIS ───────────────────────────────────────
+// ── Modal: MOD10 ──────────────────────────────────────────────────────────────
+const SEDI_MOD10 = [
+  'Lecce — Via Marco Biagi 4',
+  'Bologna — Viale Berti Pichat 6/2',
+  'Caserta — Via Brecce Bianche',
+  'Milano — Via Bassini 15',
+  'Milano — Via Bergognone 34',
+  'Milano — Palazzo delle Stelline',
+  'Sassari — Via De Nicola 1',
+  'Venezia Marghera — Via della Libertà 12',
+  'Viterbo — Via Garbini 9',
+  'Remoto',
+  'Misto',
+];
+
+const CCNL_LEVELS_MOD10 = ['1°','2°','3°','4°','5°','6°','7°','QA','QB','D'];
+
+function ModalMOD10({ onClose }: { onClose: () => void }) {
+  const [form, setForm] = useState({
+    contractType: '', isRinnovo: false,
+    mansione: '', qualifica: '', ccnlLevel: '',
+    grossSalaryFT: '', partTimePercent: '', welfare: '', fondi: '',
+    startDate: '', endDate: '',
+    sede: '', orgUnit: '', costCenter: '', activityDescription: '',
+    insurance: '', isExpat: false, expatCountry: '',
+    directorName: '',
+  });
+
+  function update(field: string, value: string | boolean) {
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box-lg" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-header-cmcc" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <span className="tag tag-blue me-2">Subordinato</span>
+            <strong>MOD10 — Richiesta Contratto Subordinato</strong>
+          </div>
+          <button className="btn-cmcc-ghost" onClick={onClose} style={{ fontSize: 20, padding: '2px 8px' }}>&times;</button>
+        </div>
+        <div className="modal-body-cmcc" style={{ overflowY: 'auto', flex: 1 }}>
+          {/* Tipo Contratto */}
+          <div className="summary-section">
+            <div className="summary-section-header">Tipo Contratto</div>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label">Tipo contratto</label>
+                <select className="form-select" value={form.contractType} onChange={e => update('contractType', e.target.value)}>
+                  <option value="">Seleziona...</option>
+                  <option value="IMP_TD">Impiegato TD</option>
+                  <option value="IMP_TI">Impiegato TI</option>
+                  <option value="QUA_TD">Quadro TD</option>
+                  <option value="QUA_TI">Quadro TI</option>
+                  <option value="DIR">Dirigente</option>
+                </select>
+              </div>
+              <div className="col-md-6 d-flex align-items-end">
+                <div className="form-check mb-2">
+                  <input type="checkbox" className="form-check-input" id="isRinnovo10" checked={form.isRinnovo} onChange={e => update('isRinnovo', e.target.checked)} />
+                  <label className="form-check-label" htmlFor="isRinnovo10">È un rinnovo / proroga / trasformazione?</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Mansione e Inquadramento */}
+          <div className="summary-section">
+            <div className="summary-section-header">Mansione e Inquadramento</div>
+            <div className="row g-3">
+              <div className="col-12">
+                <label className="form-label">Mansione</label>
+                <textarea className="form-control" rows={3} value={form.mansione} onChange={e => update('mansione', e.target.value)} placeholder="Descrizione sintetica della posizione e delle responsabilità..." />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Qualifica</label>
+                <input className="form-control" value={form.qualifica} onChange={e => update('qualifica', e.target.value)} placeholder="Es. Scientist, Software Engineer..." />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Livello CCNL</label>
+                <select className="form-select" value={form.ccnlLevel} onChange={e => update('ccnlLevel', e.target.value)}>
+                  <option value="">Seleziona...</option>
+                  {CCNL_LEVELS_MOD10.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+          {/* Dati Economici */}
+          <div className="summary-section">
+            <div className="summary-section-header">Dati Economici</div>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label">Lordo FT annuale (€)</label>
+                <input type="number" className="form-control" min={0} step={1000} value={form.grossSalaryFT} onChange={e => update('grossSalaryFT', e.target.value)} placeholder="Es. 35000" />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">% Part Time (0 = Full Time)</label>
+                <input type="number" className="form-control" min={0} max={100} step={5} value={form.partTimePercent} onChange={e => update('partTimePercent', e.target.value)} placeholder="100 = Full Time" />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Welfare (€/anno)</label>
+                <input type="number" className="form-control" min={0} step={100} value={form.welfare} onChange={e => update('welfare', e.target.value)} placeholder="Es. 400" />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Fondi aggiuntivi (€)</label>
+                <input type="number" className="form-control" min={0} step={100} value={form.fondi} onChange={e => update('fondi', e.target.value)} placeholder="0" />
+              </div>
+            </div>
+          </div>
+          {/* Date */}
+          <div className="summary-section">
+            <div className="summary-section-header">Date</div>
+            <div className="row g-3">
+              <div className="col-md-4">
+                <label className="form-label">Data inizio</label>
+                <input type="date" className="form-control" value={form.startDate} onChange={e => update('startDate', e.target.value)} />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Data fine</label>
+                <input type="date" className="form-control" value={form.endDate} onChange={e => update('endDate', e.target.value)} />
+                <div style={{ fontSize: 11, color: 'var(--cmcc-text-muted)', marginTop: 3 }}>Lasciare vuoto per contratti a tempo indeterminato</div>
+              </div>
+            </div>
+          </div>
+          {/* Struttura Organizzativa */}
+          <div className="summary-section">
+            <div className="summary-section-header">Struttura Organizzativa</div>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label">Sede</label>
+                <select className="form-select" value={form.sede} onChange={e => update('sede', e.target.value)}>
+                  <option value="">Seleziona sede...</option>
+                  {SEDI_MOD10.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Unità Organizzativa</label>
+                <input className="form-control" value={form.orgUnit} onChange={e => update('orgUnit', e.target.value)} placeholder="Es. IAFES, ICR, People & Culture..." />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Centro di Costo</label>
+                <input className="form-control" value={form.costCenter} onChange={e => update('costCenter', e.target.value)} placeholder="Es. 23101100 - ICR" />
+              </div>
+              <div className="col-12">
+                <label className="form-label">Descrizione attività</label>
+                <textarea className="form-control" rows={3} value={form.activityDescription} onChange={e => update('activityDescription', e.target.value)} placeholder="Descrivi le principali attività che la risorsa svolgerà..." />
+              </div>
+            </div>
+          </div>
+          {/* Dettagli Aggiuntivi */}
+          <div className="summary-section">
+            <div className="summary-section-header">Dettagli Aggiuntivi</div>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label">Assicurazione viaggio</label>
+                <select className="form-select" value={form.insurance} onChange={e => update('insurance', e.target.value)}>
+                  <option value="">Seleziona...</option>
+                  <option value="FREQ">Frequente</option>
+                  <option value="OCC">Occasionale</option>
+                  <option value="NO">Non previsto</option>
+                </select>
+              </div>
+              <div className="col-md-6 d-flex align-items-end">
+                <div style={{ width: '100%' }}>
+                  <div className="form-check mb-2">
+                    <input type="checkbox" className="form-check-input" id="isExpat10" checked={form.isExpat} onChange={e => update('isExpat', e.target.checked)} />
+                    <label className="form-check-label" htmlFor="isExpat10">Lavoratore Expatriate?</label>
+                  </div>
+                  {form.isExpat && (
+                    <input className="form-control" value={form.expatCountry} onChange={e => update('expatCountry', e.target.value)} placeholder="Paese di residenza / provenienza" />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Direttore */}
+          <div className="summary-section">
+            <div className="summary-section-header">Direttore</div>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label">Nome Direttore / Responsabile</label>
+                <input className="form-control" value={form.directorName} onChange={e => update('directorName', e.target.value)} placeholder="Nome e cognome (per firma)" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer-cmcc" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn-cmcc-secondary" onClick={onClose}>Chiudi</button>
+          <button className="btn-cmcc-ghost" onClick={() => alert('Funzionalità disponibile nella versione completa con backend')}>
+            <i className="bi bi-printer me-1" />Stampa PDF
+          </button>
+          <button className="btn-cmcc-primary" onClick={() => alert('Funzionalità disponibile nella versione completa con backend')}>
+            <i className="bi bi-file-earmark-pdf me-1" />Salva come PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Generic modal (fallback for MOD10BIS etc.) ───────────────────────────────
 function ModalGeneric({ modulo, onClose }: { modulo: Modulo; onClose: () => void }) {
   const badgeClass = BADGE_CLASS[modulo.badge];
   return (
@@ -776,6 +1089,7 @@ function ModalGeneric({ modulo, onClose }: { modulo: Modulo; onClose: () => void
 function ModuloModal({ modulo, onClose }: { modulo: Modulo; onClose: () => void }) {
   switch (modulo.id) {
     case 'MOD09':    return <ModalMOD09 onClose={onClose} />;
+    case 'MOD10':    return <ModalMOD10 onClose={onClose} />;
     case 'MOD13':    return <ModalMOD13 onClose={onClose} />;
     case 'MOD138':   return <ModalMOD138 onClose={onClose} />;
     case 'MOD14':    return <ModalMOD14 onClose={onClose} />;

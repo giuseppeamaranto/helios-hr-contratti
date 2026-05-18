@@ -288,69 +288,86 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
 
   function getStepClickData(stepStatus: string): StepClickData | null {
     if (proc.status !== stepStatus) return null;
+    const isAdmin = currentRole === 'amm';
+    const actor = isAdmin ? 'Ufficio AMM (override)' : proc.requestedBy;
     const closeModal = () => { setStepModal(null); setStepModalNotes(''); };
+    const adminDesc = isAdmin ? ' (Admin — bypass ruolo)' : '';
+
     switch (stepStatus as ProcessStatus) {
       case 'bozza':
-        if (currentRole !== 'rs') return null;
+        if (currentRole !== 'rs' && !isAdmin) return null;
         return {
           title: 'Invia per Approvazione',
-          desc: 'Il processo verrà inviato all\'RS per la prima approvazione.',
+          desc: `Il processo verrà inviato per la prima approvazione RS.${adminDesc}`,
           canReject: false,
-          onApprove: () => { advanceStatus('approvazione-rs', proc.requestedBy, 'Processo inviato per approvazione RS', stepModalNotes || undefined); closeModal(); },
+          onApprove: () => { advanceStatus('approvazione-rs', actor, 'Processo inviato per approvazione RS', stepModalNotes || undefined); closeModal(); },
         };
       case 'approvazione-rs': {
-        if (currentRole !== 'rs') return null;
+        if (currentRole !== 'rs' && !isAdmin) return null;
         const appr = proc.approvals.find(a => a.role === 'rs' && a.status === 'pending');
-        if (!appr) return null;
         return {
           title: 'Approvazione RS',
-          desc: 'Approva o respingi la richiesta come Responsabile di Struttura.',
+          desc: `Approva o respingi la richiesta.${adminDesc}`,
           canReject: true,
-          onApprove: () => { handleApproval(appr, true, stepModalNotes || undefined); closeModal(); },
-          onReject:  () => { handleApproval(appr, false, stepModalNotes || undefined); closeModal(); },
+          onApprove: () => {
+            if (appr) handleApproval(appr, true, stepModalNotes || undefined);
+            else advanceStatus('approvazione-dir', actor, 'Approvazione RS — override AMM', stepModalNotes || undefined);
+            closeModal();
+          },
+          onReject: () => {
+            if (appr) handleApproval(appr, false, stepModalNotes || undefined);
+            else advanceStatus('respinto', actor, 'Processo respinto in fase RS — override AMM', stepModalNotes || undefined);
+            closeModal();
+          },
         };
       }
       case 'approvazione-dir': {
-        if (currentRole !== 'direttore') return null;
+        if (currentRole !== 'direttore' && !isAdmin) return null;
         const appr = proc.approvals.find(a => a.role === 'direttore' && a.status === 'pending');
-        if (!appr) return null;
         return {
           title: 'Approvazione Direttore',
-          desc: 'Approva o respingi la richiesta come Direttore.',
+          desc: `Approva o respingi la richiesta come Direttore.${adminDesc}`,
           canReject: true,
-          onApprove: () => { handleApproval(appr, true, stepModalNotes || undefined); closeModal(); },
-          onReject:  () => { handleApproval(appr, false, stepModalNotes || undefined); closeModal(); },
+          onApprove: () => {
+            if (appr) handleApproval(appr, true, stepModalNotes || undefined);
+            else advanceStatus('verifica-gru', actor, 'Approvazione Direttore — override AMM', stepModalNotes || undefined);
+            closeModal();
+          },
+          onReject: () => {
+            if (appr) handleApproval(appr, false, stepModalNotes || undefined);
+            else advanceStatus('respinto', actor, 'Processo respinto in fase Direttore — override AMM', stepModalNotes || undefined);
+            closeModal();
+          },
         };
       }
       case 'verifica-gru':
-        if (currentRole !== 'gru') return null;
+        if (currentRole !== 'gru' && !isAdmin) return null;
         return {
           title: 'Verifica GRU',
-          desc: 'Conferma di aver verificato la documentazione e avanza il processo.',
+          desc: `Conferma di aver verificato la documentazione e avanza il processo.${adminDesc}`,
           canReject: false,
-          onApprove: () => { advanceStatus('elaborazione-gru', 'Team GRU', 'Verifica GRU completata — avanzamento a elaborazione', stepModalNotes || undefined); closeModal(); },
+          onApprove: () => { advanceStatus('elaborazione-gru', isAdmin ? actor : 'Team GRU', 'Verifica GRU completata', stepModalNotes || undefined); closeModal(); },
         };
       case 'elaborazione-gru':
-        if (currentRole !== 'gru') return null;
+        if (currentRole !== 'gru' && !isAdmin) return null;
         return {
           title: 'Elaborazione GRU',
-          desc: 'Conferma il completamento dell\'elaborazione GRU.',
+          desc: `Conferma il completamento dell'elaborazione GRU.${adminDesc}`,
           canReject: false,
-          onApprove: () => { advanceStatus('lettera-presentazione', 'Team GRU', 'Elaborazione GRU completata', stepModalNotes || undefined); closeModal(); },
+          onApprove: () => { advanceStatus('lettera-presentazione', isAdmin ? actor : 'Team GRU', 'Elaborazione GRU completata', stepModalNotes || undefined); closeModal(); },
         };
       case 'lettera-presentazione':
-        if (currentRole !== 'gru') return null;
+        if (currentRole !== 'gru' && !isAdmin) return null;
         return {
           title: 'Lettera di Presentazione',
-          desc: 'Conferma l\'invio della lettera di presentazione alla risorsa.',
+          desc: `Conferma l'invio della lettera di presentazione alla risorsa.${adminDesc}`,
           canReject: false,
-          onApprove: () => { advanceStatus('contratto-preparazione', 'Team GRU', 'Lettera di presentazione inviata', stepModalNotes || undefined); closeModal(); },
+          onApprove: () => { advanceStatus('contratto-preparazione', isAdmin ? actor : 'Team GRU', 'Lettera di presentazione inviata', stepModalNotes || undefined); closeModal(); },
         };
       case 'contratto-preparazione':
-        if (currentRole !== 'amm') return null;
         return {
           title: 'Preparazione Contratto',
-          desc: 'Invia il contratto per la firma delle parti.',
+          desc: `Invia il contratto per la firma delle parti.${adminDesc}`,
           canReject: false,
           onApprove: () => { advanceStatus('contratto-firma', 'Ufficio AMM', 'Contratto inviato per firma', stepModalNotes || undefined); closeModal(); },
         };
@@ -362,11 +379,12 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           onApprove: () => { advanceStatus('anagrafica', 'Sistema', 'Contratto firmato da tutte le parti', stepModalNotes || undefined); closeModal(); },
         };
       case 'anagrafica':
-        if (currentRole !== 'amm') return null;
-        if (!allModsSubmitted) return null;
+        if (!allModsSubmitted && !isAdmin) return null;
         return {
           title: 'Caricamento Zucchetti',
-          desc: 'Tutti i moduli sono stati inviati. Procedi con il caricamento su Zucchetti.',
+          desc: allModsSubmitted
+            ? 'Tutti i moduli sono stati inviati. Procedi con il caricamento su Zucchetti.'
+            : `Caricamento forzato su Zucchetti.${adminDesc}`,
           canReject: false,
           onApprove: () => { handleZucchetti(); closeModal(); },
         };
