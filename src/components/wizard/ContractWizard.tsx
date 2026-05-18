@@ -43,6 +43,10 @@ export interface WizardState {
   newResourceCF?: string;
   newResourceBirthDate?: string;
   newResourceNationality?: string;
+  fromRecruiting: boolean;
+  recruitingCandidateId?: string;
+  jobCallCode?: string;
+  jobCallTitle?: string;
   mod09: Partial<Mod09Data>;
   mod10: Partial<Mod10Data>;
   documents: ProcessDocument[];
@@ -97,13 +101,13 @@ function validateStep(step: number, state: WizardState): string[] {
         errors.push('Inserisci il compenso lordo mensile');
     }
     if (state.modType === 'mod10') {
-      if (!state.mod10.ccnl) errors.push('Seleziona il CCNL');
-      if (!state.mod10.contractLevel) errors.push('Seleziona il livello contrattuale');
-      if (!state.mod10.profession) errors.push('Seleziona il profilo professionale');
-      if (!state.mod10.qualProf) errors.push('Seleziona la qualifica professionale');
-      if (!state.mod10.ral || state.mod10.ral <= 0) errors.push('Inserisci la RAL');
+      if (!state.mod10.contractTypeMod10) errors.push('Seleziona il tipo contratto');
+      if (!state.mod10.ccnlLevel) errors.push('Seleziona il livello CCNL');
+      if (!state.mod10.mansione) errors.push('Seleziona la mansione');
+      if (!state.mod10.qualifica) errors.push('Seleziona la qualifica');
+      if (!state.mod10.grossSalaryFT || state.mod10.grossSalaryFT <= 0) errors.push('Inserisci il lordo FT annuale');
       if (!state.mod10.startDate) errors.push('Inserisci la data di inizio');
-      if (!state.mod10.isTimeIndeterminate && !state.mod10.endDate) errors.push('Inserisci la data di fine');
+      if (!state.mod10.endDate) errors.push('Inserisci la data di fine');
       if (!state.mod10.activityDescription?.trim()) errors.push('Inserisci la descrizione dell\'attività');
     }
   }
@@ -149,6 +153,10 @@ function buildProcess(
     isNewResource: state.isNewResource,
     newResourceName: state.isNewResource ? state.newResourceName : undefined,
     newResourceEmail: state.isNewResource ? state.newResourceEmail : undefined,
+    fromRecruiting: state.fromRecruiting,
+    recruitingCandidateId: state.recruitingCandidateId,
+    jobCallCode: state.jobCallCode,
+    jobCallTitle: state.jobCallTitle,
     mod09: state.modType === 'mod09' ? (state.mod09 as Mod09Data) : undefined,
     mod10: state.modType === 'mod10' ? (state.mod10 as Mod10Data) : undefined,
     approvals: [
@@ -204,6 +212,10 @@ export function ContractWizard({ currentRole, onSave, onCancel, existingProcesse
     isNewResource: false,
     newResourceName: '',
     newResourceEmail: '',
+    fromRecruiting: false,
+    recruitingCandidateId: undefined,
+    jobCallCode: undefined,
+    jobCallTitle: undefined,
     mod09: {},
     mod10: {},
     documents: [],

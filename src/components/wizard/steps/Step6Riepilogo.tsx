@@ -122,7 +122,7 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
             <i className="bi bi-file-earmark-check" />
             Dettaglio Contratto MOD09
           </div>
-          <SummaryRow label="Tipo collaborazione"  value={state.mod09.collaborationType} />
+          <SummaryRow label="Tipo contratto"       value={state.mod09.contractTypeMod09} />
           <SummaryRow label="Oggetto prestazione"  value={state.mod09.activityObject} />
           <SummaryRow label="Deliverable"          value={state.mod09.deliverables} />
           <SummaryRow label="Data Inizio"          value={state.mod09.startDate} />
@@ -135,12 +135,9 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
           />
           <SummaryRow
             label="Modalità Pagamento"
-            value={state.mod09.paymentSchedule
-              ? { mensile: 'Mensile', trimestrale: 'Trimestrale', saldo: 'A Saldo' }[state.mod09.paymentSchedule]
-              : undefined}
+            value={state.mod09.paymentSchedule}
           />
           <SummaryRow label="P.IVA"            value={state.mod09.vatRequired ? `Sì — ${state.mod09.vatNumber || 'non indicata'}` : 'No'} />
-          <SummaryRow label="Esclusività"      value={state.mod09.isExclusive === true ? 'Sì' : state.mod09.isExclusive === false ? 'No' : undefined} />
           <SummaryRow label="Luogo di Lavoro"  value={state.mod09.workLocation} />
           <SummaryRow label="Strumenti CMCC"   value={state.mod09.tools} />
           <SummaryRow label="Report a"         value={state.mod09.reportTo} />
@@ -154,26 +151,27 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
             <i className="bi bi-file-earmark-check" />
             Dettaglio Contratto MOD10
           </div>
-          <SummaryRow label="CCNL"               value={state.mod10.ccnl} />
-          <SummaryRow label="Livello"            value={state.mod10.contractLevel} />
-          <SummaryRow label="Profilo Prof."      value={state.mod10.profession} />
-          <SummaryRow label="Qualifica Prof."    value={state.mod10.qualProf} />
+          <SummaryRow label="Tipo Contratto"      value={state.mod10.contractTypeMod10} />
+          <SummaryRow label="Livello CCNL"       value={state.mod10.ccnlLevel} />
+          <SummaryRow label="Mansione"           value={state.mod10.mansione} />
+          <SummaryRow label="Qualifica"          value={state.mod10.qualifica} />
           <SummaryRow
-            label="RAL"
-            value={state.mod10.ral ? `€ ${state.mod10.ral.toLocaleString('it-IT')} / anno` : undefined}
+            label="Lordo FT Annuale"
+            value={state.mod10.grossSalaryFT ? `€ ${state.mod10.grossSalaryFT.toLocaleString('it-IT')} / anno` : undefined}
           />
           <SummaryRow
             label="Stipendio mensile"
-            value={state.mod10.ral ? `€ ${(state.mod10.ral / 14).toLocaleString('it-IT', { minimumFractionDigits: 2 })} (÷ 14)` : undefined}
+            value={state.mod10.grossSalaryFT ? `€ ${(state.mod10.grossSalaryFT / 14).toLocaleString('it-IT', { minimumFractionDigits: 2 })} (÷ 14)` : undefined}
           />
           <SummaryRow
             label="Part-Time"
-            value={state.mod10.isPartTime ? `Sì — ${state.mod10.partTimePercent ?? '?'}%` : 'No'}
+            value={(state.mod10.partTimePercent ?? 0) > 0 && (state.mod10.partTimePercent ?? 0) < 100
+              ? `Sì — ${state.mod10.partTimePercent}%` : 'No'}
           />
           <SummaryRow label="Data Inizio"        value={state.mod10.startDate} />
           <SummaryRow
-            label="Durata"
-            value={state.mod10.isTimeIndeterminate ? 'Tempo Indeterminato' : state.mod10.endDate ?? undefined}
+            label="Data Fine"
+            value={state.mod10.endDate ?? '—'}
           />
           <SummaryRow label="Descrizione Att."   value={state.mod10.activityDescription} />
           <SummaryRow label="Luogo di Lavoro"    value={state.mod10.workLocation} />

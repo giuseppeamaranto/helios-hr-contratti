@@ -21,6 +21,215 @@ export const PROJECTS: Project[] = [
   { code: 'ASC-CORE-2024',     name: 'HPC Infrastructure & Operations',              unitCode: 'ASC',  pi: 'Ing. Gentile',    endDate: '2025-12-31', costCenter: 'CO-AS01' },
 ];
 
+// ── Picklist MOD09 — da Excel MOD09-GRU rev42 ────────────────────────────
+
+/** Tipologia contratto (dropdown MOD09, cella B8) */
+export const MOD09_CONTRACT_TYPES = [
+  { code: 'COCOCO',    label: 'Collaborazione Coordinata e Continuativa', aliquotaPiena: 0.3503, aliquotaAgevolata: 0.24 },
+  { code: 'OCCASIONALE', label: 'Collaborazione Autonoma Occasionale',    aliquotaPiena: 0.3503, aliquotaAgevolata: 0.24 },
+  { code: 'CONSULENZA',  label: 'Consulenza',                             aliquotaPiena: 0,      aliquotaAgevolata: 0    },
+  { code: 'CONS_EST',    label: 'Consulenza Estera',                      aliquotaPiena: 0,      aliquotaAgevolata: 0    },
+];
+
+/** Modalità di selezione (dropdown MOD09, da codifiche AT13-AT17) */
+export const MOD09_SELECTION_MODES = [
+  { code: 'JOB_CALL',    label: 'Job Call (selezione pubblica)' },
+  { code: 'ATS',         label: 'CV presente in ATS (Application Tracking System)', fromRecruiting: true },
+  { code: 'AFFILIATO',   label: 'Affiliato (da oltre 24 mesi)' },
+  { code: 'CHIARA_FAMA', label: 'Chiara Fama' },
+];
+
+/** Lingue del contratto (dropdown MOD09) */
+export const MOD09_LANGUAGES = ['Italiano', 'Inglese'];
+
+/** Termini di pagamento (dropdown MOD09, AT115-AT119) */
+export const MOD09_PAYMENT_TERMS = ['Mensile', 'Bimestrale', 'Trimestrale', 'Altro'];
+
+/** Impegno (dropdown MOD09) */
+export const MOD09_ENGAGEMENT = ['Full Time', 'Parziale'];
+
+/** Aliquote contributi (da tabella MOD09) */
+export const MOD09_ALIQUOTE = {
+  inps:  { piena: 0.3503, agevolata: 0.24 },
+  inail: { piena: 0.004,  agevolata: 0.004 },
+};
+
+// ── Picklist MOD10 — da Excel MOD10-10BIS-GRU rev21 ──────────────────────
+
+/** Tipologia contratto subordinato (dropdown MOD10, AM47-AM53) */
+export const MOD10_CONTRACT_TYPES = [
+  { code: 'IMP_TI', label: 'Impiegato a tempo indeterminato', isIndeterminate: true,  isQuadro: false, isDir: false },
+  { code: 'IMP_TD', label: 'Impiegato a tempo determinato',   isIndeterminate: false, isQuadro: false, isDir: false },
+  { code: 'QUA_TI', label: 'Quadro a tempo indeterminato',    isIndeterminate: true,  isQuadro: true,  isDir: false },
+  { code: 'QUA_TD', label: 'Quadro a tempo determinato',      isIndeterminate: false, isQuadro: true,  isDir: false },
+  { code: 'DIR',    label: 'Dirigente',                       isIndeterminate: true,  isQuadro: false, isDir: true  },
+];
+
+/** Rinnovo/Trasformazione (dropdown MOD10, AG22-AG24) */
+export const MOD10_RINNOVO_TYPES = [
+  { code: 'PROROGA_TD',     label: 'Proroga Tempo Determinato' },
+  { code: 'TRASFORMAZIONE', label: 'Trasformazione (TD → TI)' },
+];
+
+/** Livelli CCNL Terziario Confcommercio (da MOD10, AG11-AG20) */
+export const CCNL_LEVELS_TERZ = [
+  { code: '1', label: '1° Livello' },
+  { code: '2', label: '2° Livello' },
+  { code: '3', label: '3° Livello' },
+  { code: '4', label: '4° Livello' },
+  { code: '5', label: '5° Livello' },
+  { code: '6', label: '6° Livello' },
+  { code: '7', label: '7° Livello' },
+  { code: 'QA', label: 'Quadro A' },
+  { code: 'QB', label: 'Quadro B' },
+  { code: 'D',  label: 'Dirigente' },
+];
+
+/** Assicurazione viaggio (dropdown MOD10) */
+export const MOD10_INSURANCE = [
+  { code: 'FREQ',  label: 'Sì — Viaggiatore Frequente' },
+  { code: 'OCC',   label: 'Sì — Viaggiatore Occasionale' },
+  { code: 'NO',    label: 'No' },
+];
+
+// ── Qualifiche con range retributivi (foglio QUALIFICHE di MOD09) ─────────
+
+export interface QualificaRange {
+  code: string;
+  label: string;
+  minLordo: number | null;
+  maxLordo: number | null;
+  rateOrariaMin: number | null;
+  rateOrariaMax: number | null;
+  descrizione: string;
+}
+
+export const QUALIFICHE_RANGES: QualificaRange[] = [
+  { code: 'PRINCIPAL_SCI', label: 'Principal Scientist',       minLordo: 70000, maxLordo: null,  rateOrariaMin: 50.31, rateOrariaMax: null,  descrizione: 'Coordina gruppi e programmi di ricerca; supporta la Direzione Scientifica. Min 13 anni esperienza + PhD.' },
+  { code: 'SR_SCI',        label: 'Senior Scientist',          minLordo: 60000, maxLordo: null,  rateOrariaMin: 43.12, rateOrariaMax: null,  descrizione: 'Coordina gruppi di lavoro e progetti; autonomo su problemi complessi. Min 10 anni + PhD.' },
+  { code: 'SCI',           label: 'Scientist',                 minLordo: 40000, maxLordo: 80000, rateOrariaMin: 28.75, rateOrariaMax: 57.5,  descrizione: 'Autonomo nell\'attività di ricerca; gestisce WP di progetto; collabora alla presentazione di proposte. Min 6 anni + PhD.' },
+  { code: 'JR_SCI',        label: 'Junior Scientist',          minLordo: 33000, maxLordo: 65000, rateOrariaMin: 23.72, rateOrariaMax: 46.72, descrizione: 'Collabora in progetti nazionali/internazionali; partecipa alla pubblicazione. Min 3 anni + PhD.' },
+  { code: 'POST_DOC',      label: 'Post Doc',                  minLordo: 28000, maxLordo: 55000, rateOrariaMin: 20.12, rateOrariaMax: 39.54, descrizione: 'Realizza ricerca su procedure prestabilite; contribuisce alla pubblicazione. Richiesto Dottorato.' },
+  { code: 'POST_DEGREE',   label: 'Post Degree',               minLordo: 17000, maxLordo: 30000, rateOrariaMin: 12.22, rateOrariaMax: 21.56, descrizione: 'Collabora in progetti su procedure prestabilite. Richiesta Laurea Specialistica. Durata di riferimento: 1 anno.' },
+  { code: 'PRINCIPAL_AS',  label: 'Principal Associate Scientist', minLordo: 70000, maxLordo: null,  rateOrariaMin: 50.31, rateOrariaMax: null,  descrizione: 'Supporta la Direzione strategica; guida nuovi filoni di ricerca. Min 13 anni.' },
+  { code: 'SR_AS',         label: 'Senior Associate Scientist', minLordo: 50000, maxLordo: 70000, rateOrariaMin: 35.94, rateOrariaMax: 50.31, descrizione: 'Consulenza/supporto tecnico-scientifico avanzato; coordina attività di assistenza. Min 10 anni.' },
+  { code: 'AS',            label: 'Associate Scientist',       minLordo: 35000, maxLordo: 60000, rateOrariaMin: 25.16, rateOrariaMax: 43.12, descrizione: 'Supporto tecnico-scientifico per analisi dati e sviluppo modelli. Min 3 anni.' },
+  { code: 'JR_AS',         label: 'Junior Associate Scientist', minLordo: 21000, maxLordo: 40000, rateOrariaMin: 15.09, rateOrariaMax: 28.75, descrizione: 'Progetta e analizza dati; manutenzione e sviluppo software. Diploma o cultura equivalente.' },
+  { code: 'PRINCIPAL_MGR', label: 'Principal Scientific Manager', minLordo: 38000, maxLordo: null,  rateOrariaMin: 27.31, rateOrariaMax: null,  descrizione: 'Coordina gestione di attività e progetti complessi; rappresenta la Fondazione. Min 10 anni + Laurea.' },
+  { code: 'SR_MGR',        label: 'Senior Scientific Manager',  minLordo: 33000, maxLordo: null,  rateOrariaMin: 23.72, rateOrariaMax: null,  descrizione: 'Gestisce portafogli di progetti; coordina team; sviluppa strategie a lungo termine. Min 8 anni.' },
+  { code: 'JR_MGR',        label: 'Junior Scientific Manager',  minLordo: 22000, maxLordo: 45000, rateOrariaMin: 15.81, rateOrariaMax: 32.34, descrizione: 'Collabora alla gestione di progetti; applica best practice; supervisiona attività. Laurea.' },
+  { code: 'TEC_MAN',       label: 'Personale Tecnico-Manageriale', minLordo: null,  maxLordo: null,  rateOrariaMin: null,  rateOrariaMax: null,  descrizione: 'Inquadramento definito in base al posizionamento in organigramma e responsabilità (CCNL di riferimento).' },
+];
+
+// ── Centri di Costo (da colonna AS del MOD09 e AW del MOD10) ─────────────
+
+export const COST_CENTERS = [
+  { code: '23100000', label: '23100000 - IPSO' },
+  { code: '23101001', label: '23101001 - ICC' },
+  { code: '23101002', label: '23101002 - PSEO' },
+  { code: '23101003', label: '23101003 - GCNF' },
+  { code: '23101004', label: '23101004 - AIML' },
+  { code: '23101100', label: '23101100 - ICR' },
+  { code: '23101102', label: '23101102 - IAFES' },
+  { code: '23101103', label: '23101103 - RAAS' },
+  { code: '23101104', label: '23101104 - REMHI' },
+  { code: '23101106', label: '23101106 - SOWAS' },
+  { code: '23101200', label: '23101200 - EIEE' },
+  { code: '23101201', label: '23101201 - SEME' },
+  { code: '23101202', label: '23101202 - ECIP' },
+  { code: '23101203', label: '23101203 - TCT' },
+  { code: '23101300', label: '23101300 - IESP' },
+  { code: '23101305', label: '23101305 - GOCO' },
+  { code: '23101306', label: '23101306 - ESYDA' },
+  { code: '23101307', label: '23101307 - CLIVAP' },
+  { code: '23101308', label: '23101308 - ROFS' },
+  { code: '23101400', label: '23101400 - ATEC' },
+  { code: '23101500', label: '23101500 - ADIC' },
+  { code: '23102101', label: '23102101 - CDA, Comitato Esec.' },
+  { code: '23102102', label: '23102102 - Collegio Revisori' },
+  { code: '23102103', label: '23102103 - Consiglio Scientifico' },
+  { code: '23102104', label: '23102104 - Organismo di Vigilanza' },
+  { code: '23102201', label: '23102201 - Fund Raising' },
+  { code: '23102202', label: '23102202 - Communication e Science Outreach' },
+  { code: '23102203', label: '23102203 - IT' },
+  { code: '23102204', label: '23102204 - AF' },
+  { code: '23102205', label: '23102205 - Legal e Contract Advisory' },
+  { code: '23102206', label: '23102206 - People e Culture' },
+  { code: '23102207', label: '23102207 - Executive Office' },
+  { code: '23102208', label: '23102208 - Division Manager' },
+  { code: '23102209', label: '23102209 - Facility Mgmt e HSE' },
+  { code: '23102210', label: '23102210 - Amministrazione Generico' },
+  { code: '23102211', label: '23102211 - Altri costi centrali' },
+  { code: '23102212', label: '23102212 - General Counsel' },
+  { code: '23102213', label: '23102213 - Public Procurement' },
+  { code: '23102214', label: '23102214 - Project Admin & Management Control' },
+  { code: '23102220', label: '23102220 - Licenze e Acquisti IT' },
+  { code: '23102301', label: '23102301 - Old Data Center' },
+  { code: '23102302', label: '23102302 - Data Center' },
+  { code: '23102303', label: '23102303 - Conness. reti e dati' },
+  { code: '23102304', label: '23102304 - Servizi Cybersecurity' },
+  { code: '23102401', label: '23102401 - Comitato strategico' },
+  { code: '23102402', label: '23102402 - Partecipazioni' },
+  { code: '23102403', label: '23102403 - Annual meeting' },
+  { code: '23102404', label: '23102404 - Cooperaz. Scientif.' },
+  { code: '23102405', label: '23102405 - Fellows programme' },
+  { code: '23102406', label: '23102406 - Direzione Scientific' },
+  { code: '23102407', label: '23102407 - Leadership Group' },
+  { code: '23102408', label: '23102408 - Riviste abbonamenti servizi alla ricerca' },
+  { code: '23103010', label: '23103010 - Bologna' },
+  { code: '23103020', label: '23103020 - Caserta' },
+  { code: '23103030', label: '23103030 - Lecce' },
+  { code: '23103031', label: '23103031 - Lecce Spazio' },
+  { code: '23103040', label: '23103040 - Milano Base' },
+  { code: '23103050', label: '23103050 - Torino' },
+  { code: '23103060', label: '23103060 - Civitavecchia' },
+  { code: '23103070', label: '23103070 - Milano Regus' },
+  { code: '23103080', label: '23103080 - Sassari' },
+  { code: '23103090', label: '23103090 - Venezia' },
+  { code: '23103100', label: '23103100 - Viterbo' },
+  { code: '23103110', label: '23103110 - Milano Via Savona' },
+  { code: '23104000', label: '23104000 - Altra Formazione Superiore' },
+  { code: '23106000', label: '23106000 - Infrastrutture' },
+  { code: '23107100', label: '23107100 - Direzione Operations' },
+];
+
+// ── Sedi (da colonne AT del MOD09 e AO del MOD10) ────────────────────────
+
+export const SEDI = [
+  'Lecce - Via Marco Biagi, 5',
+  'Bologna - Viale C. Berti Pichat 6/2',
+  'Caserta - Via Thomas Alva Edison s.n.c.',
+  'Milano - Largo Francesco Richini, 6',
+  'Milano - Via Bergognone, 34',
+  'Milano - Via Savona',
+  'Sassari - Via De Nicola, 9',
+  'Venezia Marghera - Via della Libertà, 12',
+  'Viterbo - Via Igino Garbini, 51',
+  'Remoto',
+  'Misto (presenza + remoto)',
+];
+
+// ── Unità organizzative (da colonna AU del MOD09 / AG del MOD10) ──────────
+
+export const ORG_UNITS_LIST = [
+  'IAFES', 'RAAS', 'REMHI', 'SOWAS', 'SEME', 'ECIP', 'TCT', 'ROFS',
+  'ESYDA', 'GOCO', 'CLIVAP', 'ICR', 'IESP', 'EIEE',
+  'HIGH PERFORMANCE COMPUTING CENTER',
+  'ADVANCED DIGITAL INNOVATION CENTER',
+  'ADVANCED TRAINING AND EDUCATION CENTER',
+  'FUND-RAISING', 'COMMUNICATION & SCIENCE OUTREACH',
+  'GENERAL COUNSEL', 'EXECUTIVE OFFICE', 'PEOPLE & CULTURE',
+  'LEGAL & CONTRACT ADVISORY', 'PUBLIC PROCUREMENT',
+  'INFORMATION TECHNOLOGY', 'ADMINISTRATION & FINANCE',
+  'PROJECT ADMINISTRATION & MANAGEMENT CONTROL', 'FACILITY MGMT & HSE',
+  'Integration of the planetary biogeochemical and industrial carbon cycle',
+  'Predicting socio-economic impacts of climate change',
+  'Global coasts as a new frontier',
+  'Integrating AI and ML in the modeling chain',
+];
+
+// ── Legacy exports (mantenuti per compatibilità) ──────────────────────────
+
 export const CCNL_TYPES = [
   { code: 'COCOCO', label: 'Collaborazione Coordinata e Continuativa' },
   { code: 'TERZ',   label: 'Terziario Confcommercio' },
@@ -28,41 +237,74 @@ export const CCNL_TYPES = [
 ];
 
 export const CCNL_LEVELS: Record<string, { code: string; label: string }[]> = {
-  TERZ: [
-    { code: '001', label: '1° Livello' },
-    { code: '002', label: '2° Livello' },
-    { code: '003', label: '3° Livello' },
-    { code: '004', label: '4° Livello' },
-    { code: 'DIR', label: 'Dirigente' },
-  ],
+  TERZ:  CCNL_LEVELS_TERZ,
+  DIRIG: [{ code: 'D', label: 'Dirigente' }],
 };
 
-export const PROFESSIONS = [
-  'JUNIOR RESEARCH ASSOCIATE',
-  'RESEARCH ASSOCIATE',
-  'SENIOR RESEARCH ASSOCIATE',
-  'JUNIOR SCIENTIST',
-  'SCIENTIST',
-  'SENIOR SCIENTIST',
-  'JUNIOR ASSOCIATE SCIENTIST',
-  'ASSOCIATE SCIENTIST',
-  'PRINCIPAL SCIENTIST',
-  'POST DOC',
-  'POST DEGREE',
-  'JUNIOR SCIENTIFIC MANAGER',
-  'SCIENTIFIC MANAGER',
-  'SENIOR SCIENTIFIC MANAGER',
-  'PERSONALE TECNICO MANAGERIALE',
-];
+export const PROFESSIONS = QUALIFICHE_RANGES.map(q => q.label.toUpperCase());
 
-export const SEDI = [
-  'Sede Legale (Lecce)',
-  'Venezia',
-  'Bologna',
-  'Viterbo',
-  'Sassari',
-  'Milano c/o Via Savona',
-  'Caserta',
+// ── Candidati da Recruiting (pre-alimentati dal flusso ATS) ──────────────
+
+export interface RecruitingCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  jobCallCode: string;
+  jobCallTitle: string;
+  unitCode: string;
+  unitName: string;
+  selectionDate: string;
+  proposedQualifica: string;
+  proposedContractType: string;
+  nationality: string;
+  isEU: boolean;
+  study: string;
+  cvUrl: string;
+}
+
+export const RECRUITING_CANDIDATES: RecruitingCandidate[] = [
+  {
+    id: 'REC-2025-001',
+    firstName: 'Lorenzo', lastName: 'Marchetti', fullName: 'Lorenzo Marchetti',
+    email: 'lorenzo.marchetti@cmcc.it',
+    jobCallCode: 'JC-IESP-2025-03', jobCallTitle: 'Ricercatore Modellistica Atmosferica',
+    unitCode: 'IESP', unitName: 'IESP - Istituto per la Previsione del Sistema Terrestre',
+    selectionDate: '2025-05-10', proposedQualifica: 'Post Doc',
+    proposedContractType: 'COLLABORAZIONE COORDINATA E CONTINUATIVA',
+    nationality: 'ITALIA', isEU: true, study: 'PHD', cvUrl: '#',
+  },
+  {
+    id: 'REC-2025-002',
+    firstName: 'Amira', lastName: 'Ben Salah', fullName: 'Amira Ben Salah',
+    email: 'amira.bensalah@cmcc.it',
+    jobCallCode: 'JC-ICR-2025-07', jobCallTitle: 'Junior Researcher — Coastal Resilience',
+    unitCode: 'ICR', unitName: 'ICR - Istituto per la Resilienza Climatica',
+    selectionDate: '2025-05-14', proposedQualifica: 'Junior Associate Scientist',
+    proposedContractType: 'COLLABORAZIONE COORDINATA E CONTINUATIVA',
+    nationality: 'TUNISIA', isEU: false, study: 'Laurea', cvUrl: '#',
+  },
+  {
+    id: 'REC-2025-003',
+    firstName: 'Elena', lastName: 'Voss', fullName: 'Elena Voss',
+    email: 'elena.voss@cmcc.it',
+    jobCallCode: 'JC-EIEE-2025-02', jobCallTitle: 'Economist — Climate Policy Modelling',
+    unitCode: 'EIEE', unitName: "EIEE - Istituto Europeo sull'Economia e l'Ambiente",
+    selectionDate: '2025-05-16', proposedQualifica: 'Junior Scientist',
+    proposedContractType: 'COLLABORAZIONE COORDINATA E CONTINUATIVA',
+    nationality: 'GERMANIA', isEU: true, study: 'PHD', cvUrl: '#',
+  },
+  {
+    id: 'REC-2025-004',
+    firstName: 'Giulio', lastName: 'De Santis', fullName: 'Giulio De Santis',
+    email: 'giulio.desantis@cmcc.it',
+    jobCallCode: 'JC-ASC-2025-01', jobCallTitle: 'HPC System Engineer',
+    unitCode: 'ASC', unitName: 'ASC - Advanced Scientific Computing',
+    selectionDate: '2025-05-12', proposedQualifica: 'Junior Associate Scientist',
+    proposedContractType: 'Impiegato a tempo determinato',
+    nationality: 'ITALIA', isEU: true, study: 'Laurea', cvUrl: '#',
+  },
 ];
 
 // ── Resources (from DossierRisorse - 30 sample entries) ───────────────────
@@ -257,20 +499,40 @@ export const MOCK_PROCESSES: ContractProcess[] = [
     resourceId: 'ABDMOA000001',
     resource: RESOURCES.find(r => r.idSubject === 'ABDMOA000001'),
     isNewResource: false,
+    fromRecruiting: false,
+    jobCallCode: undefined,
+    jobCallTitle: undefined,
     mod09: {
-      collaborationType: 'Ricerca scientifica',
+      contractTypeMod09: 'COCOCO',
+      selectionMode: 'JOB_CALL',
+      language: 'Italiano',
+      isProroga: false,
       activityObject: 'Sviluppo e validazione di modelli oceanografici per la previsione del sistema terrestre',
       deliverables: 'Report trimestrali, articoli scientifici, dataset elaborati',
       startDate: '2024-09-16',
       endDate: '2026-09-15',
+      qualifica: 'POST_DOC',
       grossCompensation: 2800,
+      numRate: 24,
       paymentSchedule: 'mensile',
+      aliquota: 'piena',
       vatRequired: false,
       vatNumber: '',
-      isExclusive: true,
+      engagement: 'Full Time',
+      engagementPercent: 100,
       workLocation: 'Bologna',
-      tools: 'HPC CMCC, NEMO model, Python',
+      isPNRR: false,
+      project: '',
+      workPackage: '',
+      orgUnit: '',
+      costCenter: '',
+      allocationProject: '',
       reportTo: 'Prof. Laura Conti',
+      tools: 'HPC CMCC, NEMO model, Python',
+      notes: '',
+      directorName: '',
+      directorDivisionName: '',
+      welfare: 0,
     },
     approvals: [
       { id: 'A1', role: 'rs', name: 'Prof. Laura Conti', status: 'approved', timestamp: '2025-04-11T10:00:00Z', notes: 'Approvato per progetto PRIN' },
@@ -325,20 +587,40 @@ export const MOCK_PROCESSES: ContractProcess[] = [
     resourceId: 'BALCAR000001',
     resource: RESOURCES.find(r => r.idSubject === 'BALCAR000001'),
     isNewResource: false,
+    fromRecruiting: false,
+    jobCallCode: undefined,
+    jobCallTitle: undefined,
     mod09: {
-      collaborationType: 'Ricerca scientifica',
+      contractTypeMod09: 'COCOCO',
+      selectionMode: 'JOB_CALL',
+      language: 'Italiano',
+      isProroga: true,
       activityObject: 'Analisi della resilienza climatica dei sistemi costieri nel Mediterraneo',
       deliverables: 'Dataset, report scientifici, presentazioni',
       startDate: '2026-01-01',
       endDate: '2026-12-31',
+      qualifica: 'POST_DOC',
       grossCompensation: 2500,
+      numRate: 12,
       paymentSchedule: 'mensile',
+      aliquota: 'piena',
       vatRequired: false,
       vatNumber: '',
-      isExclusive: true,
+      engagement: 'Full Time',
+      engagementPercent: 100,
       workLocation: 'Viterbo',
-      tools: 'Python, R, GIS tools',
+      isPNRR: true,
+      project: '',
+      workPackage: '',
+      orgUnit: '',
+      costCenter: '',
+      allocationProject: '',
       reportTo: 'Prof. Andrea Bianchi',
+      tools: 'Python, R, GIS tools',
+      notes: '',
+      directorName: '',
+      directorDivisionName: '',
+      welfare: 0,
     },
     approvals: [
       { id: 'A1', role: 'rs', name: 'Prof. Andrea Bianchi', status: 'approved', timestamp: '2025-05-03T09:00:00Z' },
@@ -384,21 +666,30 @@ export const MOCK_PROCESSES: ContractProcess[] = [
     resourceId: 'ALIBEA000001',
     resource: RESOURCES.find(r => r.idSubject === 'ALIBEA000001'),
     isNewResource: false,
+    fromRecruiting: false,
+    jobCallCode: undefined,
+    jobCallTitle: undefined,
     mod10: {
-      ccnl: 'Terziario Confcommercio',
-      contractLevel: '001',
-      profession: 'SENIOR SCIENTIST',
-      qualProf: 'TECNICO SCIENTIFICO',
-      ral: 52000,
-      isPartTime: false,
-      partTimePercent: 100,
+      contractTypeMod10: 'IMP_TD',
+      isRinnovo: false,
       startDate: '2025-07-01',
       endDate: '2027-06-30',
-      isTimeIndeterminate: false,
-      activityDescription: 'Ricerca su modelli di economia dell\'ambiente e scenari climatici',
+      mansione: 'Ricerca su modelli di economia dell\'ambiente e scenari climatici',
       workLocation: 'Milano c/o Via Savona',
+      qualifica: 'SR_SCI',
+      ccnlLevel: '001',
+      grossSalaryFT: 52000,
+      partTimePercent: 100,
+      welfare: 400,
+      fondi: 400,
+      orgUnit: '',
+      costCenter: '',
+      activityDescription: 'Ricerca su modelli di economia dell\'ambiente e scenari climatici',
+      insurance: 'NO',
       isExpat: false,
       expatCountry: '',
+      directorName: '',
+      notes: '',
     },
     approvals: [
       { id: 'A1', role: 'rs', name: 'Prof. Marco Ferretti', status: 'approved', timestamp: '2025-05-09T10:00:00Z', notes: 'Profilo eccellente, risorsa strategica' },
@@ -443,20 +734,40 @@ export const MOCK_PROCESSES: ContractProcess[] = [
     isNewResource: true,
     newResourceName: 'Valentina Esposito',
     newResourceEmail: 'valentina.esposito@cmcc.it',
+    fromRecruiting: false,
+    jobCallCode: undefined,
+    jobCallTitle: undefined,
     mod09: {
-      collaborationType: 'Borsa di studio',
+      contractTypeMod09: 'COCOCO',
+      selectionMode: 'JOB_CALL',
+      language: 'Italiano',
+      isProroga: false,
       activityObject: 'Sviluppo algoritmi di ottimizzazione per cluster HPC',
       deliverables: 'Codice sorgente, documentazione tecnica, report finale',
       startDate: '2025-06-01',
       endDate: '2026-05-31',
+      qualifica: 'POST_DEGREE',
       grossCompensation: 1500,
+      numRate: 12,
       paymentSchedule: 'mensile',
+      aliquota: 'piena',
       vatRequired: false,
       vatNumber: '',
-      isExclusive: true,
+      engagement: 'Full Time',
+      engagementPercent: 100,
       workLocation: 'Sassari',
-      tools: 'C++, Python, MPI, SLURM',
+      isPNRR: false,
+      project: '',
+      workPackage: '',
+      orgUnit: '',
+      costCenter: '',
+      allocationProject: '',
       reportTo: 'Prof. Giulia Romano',
+      tools: 'C++, Python, MPI, SLURM',
+      notes: '',
+      directorName: '',
+      directorDivisionName: '',
+      welfare: 0,
     },
     approvals: [
       { id: 'A1', role: 'rs', name: 'Prof. Giulia Romano', status: 'approved', timestamp: '2025-05-13T09:00:00Z' },
@@ -506,20 +817,40 @@ export const MOCK_PROCESSES: ContractProcess[] = [
     resourceId: 'DELPAO000001',
     resource: RESOURCES.find(r => r.idSubject === 'DELPAO000001'),
     isNewResource: false,
+    fromRecruiting: false,
+    jobCallCode: undefined,
+    jobCallTitle: undefined,
     mod09: {
-      collaborationType: 'Ricerca scientifica',
+      contractTypeMod09: 'COCOCO',
+      selectionMode: 'JOB_CALL',
+      language: 'Italiano',
+      isProroga: true,
       activityObject: 'Analisi e catalogazione eventi estremi nel bacino Mediterraneo',
       deliverables: 'Atlas eventi estremi, database climatico',
       startDate: '2026-01-01',
       endDate: '2026-06-30',
+      qualifica: 'SCI',
       grossCompensation: 3000,
+      numRate: 6,
       paymentSchedule: 'mensile',
+      aliquota: 'piena',
       vatRequired: false,
       vatNumber: '',
-      isExclusive: true,
+      engagement: 'Full Time',
+      engagementPercent: 100,
       workLocation: 'Viterbo',
-      tools: 'Python, NetCDF, Copernicus Data',
+      isPNRR: false,
+      project: '',
+      workPackage: '',
+      orgUnit: '',
+      costCenter: '',
+      allocationProject: '',
       reportTo: 'Prof. Stefano Russo',
+      tools: 'Python, NetCDF, Copernicus Data',
+      notes: '',
+      directorName: '',
+      directorDivisionName: '',
+      welfare: 0,
     },
     approvals: [],
     documents: [],
@@ -556,21 +887,30 @@ export const MOCK_PROCESSES: ContractProcess[] = [
     isNewResource: true,
     newResourceName: 'Marco Vitale',
     newResourceEmail: 'marco.vitale@cmcc.it',
+    fromRecruiting: false,
+    jobCallCode: undefined,
+    jobCallTitle: undefined,
     mod10: {
-      ccnl: 'Terziario Confcommercio',
-      contractLevel: '003',
-      profession: 'PERSONALE TECNICO MANAGERIALE',
-      qualProf: 'AMMINISTRATIVO',
-      ral: 38000,
-      isPartTime: false,
-      partTimePercent: 100,
+      contractTypeMod10: 'IMP_TD',
+      isRinnovo: false,
       startDate: '2025-06-01',
       endDate: '2026-05-31',
-      isTimeIndeterminate: false,
-      activityDescription: 'Gestione e manutenzione infrastruttura HPC CMCC',
+      mansione: 'Gestione e manutenzione infrastruttura HPC CMCC',
       workLocation: 'Sede Legale (Lecce)',
+      qualifica: 'TEC_MAN',
+      ccnlLevel: '003',
+      grossSalaryFT: 38000,
+      partTimePercent: 100,
+      welfare: 400,
+      fondi: 400,
+      orgUnit: '',
+      costCenter: '',
+      activityDescription: 'Gestione e manutenzione infrastruttura HPC CMCC',
+      insurance: 'NO',
       isExpat: false,
       expatCountry: '',
+      directorName: '',
+      notes: '',
     },
     approvals: [
       { id: 'A1', role: 'rs', name: 'Ing. Carlo Gentile', status: 'approved', timestamp: '2025-05-11T10:00:00Z' },

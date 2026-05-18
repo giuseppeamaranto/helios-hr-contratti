@@ -96,36 +96,80 @@ export interface HistoryEntry {
 }
 
 export interface Mod09Data {
-  collaborationType: string;
+  contractTypeMod09: string;        // from MOD09_CONTRACT_TYPES
+  selectionMode: string;            // from MOD09_SELECTION_MODES
+  language: string;                 // Italiano | Inglese
+  isProroga: boolean;
+  prorogaContractId?: string;
   activityObject: string;
   deliverables: string;
   startDate: string;
   endDate: string;
+  qualifica: string;                // from QUALIFICHE_RANGES
   grossCompensation: number;
-  paymentSchedule: 'mensile' | 'trimestrale' | 'saldo';
+  numRate: number;
+  paymentSchedule: string;          // from MOD09_PAYMENT_TERMS
+  aliquota: 'piena' | 'agevolata';
   vatRequired: boolean;
   vatNumber: string;
-  isExclusive: boolean;
-  workLocation: string;
-  tools: string;
+  engagement: string;               // Full Time | Parziale
+  engagementPercent: number;
+  workLocation: string;             // from SEDI
+  isPNRR: boolean;
+  project: string;
+  workPackage: string;
+  orgUnit: string;
+  costCenter: string;
+  allocationProject: string;
   reportTo: string;
+  tools: string;
+  notes: string;
+  directorName: string;
+  directorDivisionName: string;
+  welfare: number;
 }
 
 export interface Mod10Data {
-  ccnl: string;
-  contractLevel: string;
-  profession: string;
-  qualProf: string;
-  ral: number;
-  isPartTime: boolean;
-  partTimePercent: number;
+  contractTypeMod10: string;        // from MOD10_CONTRACT_TYPES code
+  isRinnovo: boolean;
+  rinnovoType?: string;             // from MOD10_RINNOVO_TYPES
   startDate: string;
   endDate: string;
-  isTimeIndeterminate: boolean;
+  mansione: string;
+  workLocation: string;             // from SEDI
+  qualifica: string;                // from QUALIFICHE_RANGES
+  ccnlLevel: string;                // from CCNL_LEVELS_TERZ
+  grossSalaryFT: number;            // lordo collaboratore FT
+  partTimePercent: number;
+  welfare: number;
+  fondi: number;
+  orgUnit: string;
+  costCenter: string;               // from COST_CENTERS
   activityDescription: string;
-  workLocation: string;
+  insurance: string;                // from MOD10_INSURANCE
   isExpat: boolean;
   expatCountry: string;
+  directorName: string;
+  notes: string;
+}
+
+export interface RecruitingCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  jobCallCode: string;
+  jobCallTitle: string;
+  unitCode: string;
+  unitName: string;
+  selectionDate: string;
+  proposedQualifica: string;
+  proposedContractType: string;
+  nationality: string;
+  isEU: boolean;
+  study: string;
+  cvUrl: string;
 }
 
 export interface ContractProcess {
@@ -151,6 +195,10 @@ export interface ContractProcess {
   isNewResource: boolean;
   newResourceName?: string;
   newResourceEmail?: string;
+  fromRecruiting: boolean;
+  recruitingCandidateId?: string;
+  jobCallCode?: string;
+  jobCallTitle?: string;
   mod09?: Mod09Data;
   mod10?: Mod10Data;
   approvals: Approval[];

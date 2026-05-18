@@ -159,6 +159,8 @@ function ChecklistItem({
 export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: Props) {
   const [activeTab, setActiveTab]   = useState<TabId>('dettaglio');
   const [approvalNotes, setApprovalNotes] = useState<Record<string, string>>({});
+  const [stepModal, setStepModal]   = useState<ProcessStatus | null>(null);
+  const [stepModalNotes, setStepModalNotes] = useState('');
 
   const currentStepIdx = getStepIndex(proc.status);
 
@@ -197,9 +199,9 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
   }
 
   // ── Approval action
-  function handleApproval(approval: Approval, approved: boolean) {
+  function handleApproval(approval: Approval, approved: boolean, notesOverride?: string) {
     const now = new Date().toISOString();
-    const notes = approvalNotes[approval.id] ?? '';
+    const notes = notesOverride ?? approvalNotes[approval.id] ?? '';
     const newApprovals = proc.approvals.map(a =>
       a.id === approval.id
         ? { ...a, status: (approved ? 'approved' : 'rejected') as 'approved' | 'rejected', timestamp: now, notes }
@@ -273,6 +275,104 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
       },
     ];
     onUpdate({ status: 'completato', zucchettiId, zucchettiLoaded: true, updatedAt: now, history: newHistory });
+  }
+
+  // ── Stepper click: determine if a step is actionable for current role
+  type StepClickData = {
+    title: string;
+    desc: string;
+    canReject: boolean;
+    onApprove: () => void;
+    onReject?: () => void;
+  };
+
+  function getStepClickData(stepStatus: string): StepClickData | null {
+    if (proc.status !== stepStatus) return null;
+    const closeModal = () => { setStepModal(null); setStepModalNotes(''); };
+    switch (stepStatus as ProcessStatus) {
+      case 'bozza':
+        if (currentRole !== 'rs') return null;
+        return {
+          title: 'Invia per Approvazione',
+          desc: 'Il processo verrà inviato all\'RS per la prima approvazione.',
+          canReject: false,
+          onApprove: () => { advanceStatus('approvazione-rs', proc.requestedBy, 'Processo inviato per approvazione RS', stepModalNotes || undefined); closeModal(); },
+        };
+      case 'approvazione-rs': {
+        if (currentRole !== 'rs') return null;
+        const appr = proc.approvals.find(a => a.role === 'rs' && a.status === 'pending');
+        if (!appr) return null;
+        return {
+          title: 'Approvazione RS',
+          desc: 'Approva o respingi la richiesta come Responsabile di Struttura.',
+          canReject: true,
+          onApprove: () => { handleApproval(appr, true, stepModalNotes || undefined); closeModal(); },
+          onReject:  () => { handleApproval(appr, false, stepModalNotes || undefined); closeModal(); },
+        };
+      }
+      case 'approvazione-dir': {
+        if (currentRole !== 'direttore') return null;
+        const appr = proc.approvals.find(a => a.role === 'direttore' && a.status === 'pending');
+        if (!appr) return null;
+        return {
+          title: 'Approvazione Direttore',
+          desc: 'Approva o respingi la richiesta come Direttore.',
+          canReject: true,
+          onApprove: () => { handleApproval(appr, true, stepModalNotes || undefined); closeModal(); },
+          onReject:  () => { handleApproval(appr, false, stepModalNotes || undefined); closeModal(); },
+        };
+      }
+      case 'verifica-gru':
+        if (currentRole !== 'gru') return null;
+        return {
+          title: 'Verifica GRU',
+          desc: 'Conferma di aver verificato la documentazione e avanza il processo.',
+          canReject: false,
+          onApprove: () => { advanceStatus('elaborazione-gru', 'Team GRU', 'Verifica GRU completata — avanzamento a elaborazione', stepModalNotes || undefined); closeModal(); },
+        };
+      case 'elaborazione-gru':
+        if (currentRole !== 'gru') return null;
+        return {
+          title: 'Elaborazione GRU',
+          desc: 'Conferma il completamento dell\'elaborazione GRU.',
+          canReject: false,
+          onApprove: () => { advanceStatus('lettera-presentazione', 'Team GRU', 'Elaborazione GRU completata', stepModalNotes || undefined); closeModal(); },
+        };
+      case 'lettera-presentazione':
+        if (currentRole !== 'gru') return null;
+        return {
+          title: 'Lettera di Presentazione',
+          desc: 'Conferma l\'invio della lettera di presentazione alla risorsa.',
+          canReject: false,
+          onApprove: () => { advanceStatus('contratto-preparazione', 'Team GRU', 'Lettera di presentazione inviata', stepModalNotes || undefined); closeModal(); },
+        };
+      case 'contratto-preparazione':
+        if (currentRole !== 'amm') return null;
+        return {
+          title: 'Preparazione Contratto',
+          desc: 'Invia il contratto per la firma delle parti.',
+          canReject: false,
+          onApprove: () => { advanceStatus('contratto-firma', 'Ufficio AMM', 'Contratto inviato per firma', stepModalNotes || undefined); closeModal(); },
+        };
+      case 'contratto-firma':
+        return {
+          title: 'Firma Contratto',
+          desc: 'Segna il contratto come firmato da tutte le parti.',
+          canReject: false,
+          onApprove: () => { advanceStatus('anagrafica', 'Sistema', 'Contratto firmato da tutte le parti', stepModalNotes || undefined); closeModal(); },
+        };
+      case 'anagrafica':
+        if (currentRole !== 'amm') return null;
+        if (!allModsSubmitted) return null;
+        return {
+          title: 'Caricamento Zucchetti',
+          desc: 'Tutti i moduli sono stati inviati. Procedi con il caricamento su Zucchetti.',
+          canReject: false,
+          onApprove: () => { handleZucchetti(); closeModal(); },
+        };
+      default:
+        return null;
+    }
   }
 
   return (
@@ -401,19 +501,32 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
       <div className="card-cmcc" style={{ padding: '20px 24px', marginBottom: 20 }}>
         <div className="process-stepper">
           {STEPS.map((step, idx) => {
-            let state: 'done' | 'active' | '' = '';
+            let stepState: 'done' | 'active' | '' = '';
             if (proc.status === 'annullato' || proc.status === 'respinto') {
-              state = '';
+              stepState = '';
             } else if (idx < currentStepIdx) {
-              state = 'done';
+              stepState = 'done';
             } else if (idx === currentStepIdx) {
-              state = 'active';
+              stepState = 'active';
             }
 
+            const clickData = getStepClickData(step.status);
+            const isClickable = !!clickData;
+
             return (
-              <div key={step.status} className={`step-item${state ? ' ' + state : ''}`}>
-                <div className="step-circle">
-                  {state === 'done' ? <i className="bi bi-check" /> : <span>{idx}</span>}
+              <div key={step.status} className={`step-item${stepState ? ' ' + stepState : ''}`}>
+                <div
+                  className={`step-circle${isClickable ? ' step-circle-clickable' : ''}`}
+                  title={isClickable ? `Clicca per: ${clickData.title}` : undefined}
+                  onClick={isClickable ? () => setStepModal(step.status as ProcessStatus) : undefined}
+                  style={isClickable ? { cursor: 'pointer' } : undefined}
+                >
+                  {stepState === 'done'
+                    ? <i className="bi bi-check" />
+                    : isClickable
+                    ? <i className="bi bi-lightning-fill" style={{ fontSize: 11 }} />
+                    : <span>{idx}</span>
+                  }
                 </div>
                 <div className="step-label">{step.label}</div>
               </div>
@@ -529,7 +642,7 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           {proc.modType === 'mod09' && proc.mod09 && (
             <div className="summary-section card-cmcc mb-3">
               <SectionHeader icon="bi-file-earmark-text" title="Dati Contratto MOD09" />
-              <SummaryRow label="Tipo Collaborazione"  value={proc.mod09.collaborationType} />
+              <SummaryRow label="Tipo Contratto"       value={proc.mod09.contractTypeMod09} />
               <SummaryRow label="Oggetto Attività"     value={proc.mod09.activityObject} />
               <SummaryRow label="Deliverable"          value={proc.mod09.deliverables} />
               <SummaryRow label="Data Inizio"          value={fmt(proc.mod09.startDate)} />
@@ -539,7 +652,6 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
               />
               <SummaryRow label="Cadenza Pagamento"    value={proc.mod09.paymentSchedule} />
               <SummaryRow label="IVA"                  value={proc.mod09.vatRequired ? `Sì — P.IVA ${proc.mod09.vatNumber}` : 'Non richiesta'} />
-              <SummaryRow label="Esclusività"          value={proc.mod09.isExclusive ? 'Sì' : 'No'} />
               <SummaryRow label="Luogo di lavoro"      value={proc.mod09.workLocation} />
               <SummaryRow label="Strumenti forniti"    value={proc.mod09.tools} />
               <SummaryRow label="Riferisce a"          value={proc.mod09.reportTo} />
@@ -550,18 +662,18 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           {proc.modType === 'mod10' && proc.mod10 && (
             <div className="summary-section card-cmcc mb-3">
               <SectionHeader icon="bi-file-earmark-text" title="Dati Contratto MOD10" />
-              <SummaryRow label="CCNL"                 value={proc.mod10.ccnl} />
-              <SummaryRow label="Livello"              value={proc.mod10.contractLevel} />
-              <SummaryRow label="Professione"          value={proc.mod10.profession} />
-              <SummaryRow label="Qualifica Prof."      value={proc.mod10.qualProf} />
-              <SummaryRow label="RAL (€)"
-                value={proc.mod10.ral.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+              <SummaryRow label="Tipo Contratto"       value={proc.mod10.contractTypeMod10} />
+              <SummaryRow label="Livello CCNL"         value={proc.mod10.ccnlLevel} />
+              <SummaryRow label="Mansione"             value={proc.mod10.mansione} />
+              <SummaryRow label="Qualifica"            value={proc.mod10.qualifica} />
+              <SummaryRow label="Lordo FT (€/anno)"
+                value={proc.mod10.grossSalaryFT.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
               />
-              <SummaryRow label="Part-time"            value={proc.mod10.isPartTime ? `Sì — ${proc.mod10.partTimePercent}%` : 'No'} />
+              <SummaryRow label="Part-time"
+                value={(proc.mod10.partTimePercent > 0 && proc.mod10.partTimePercent < 100)
+                  ? `Sì — ${proc.mod10.partTimePercent}%` : 'No'} />
               <SummaryRow label="Data Inizio"          value={fmt(proc.mod10.startDate)} />
-              <SummaryRow label="Data Fine"
-                value={proc.mod10.isTimeIndeterminate ? <span className="tag tag-purple">Tempo Indeterminato</span> : fmt(proc.mod10.endDate)}
-              />
+              <SummaryRow label="Data Fine"            value={fmt(proc.mod10.endDate)} />
               <SummaryRow label="Descrizione Attività" value={proc.mod10.activityDescription} />
               <SummaryRow label="Luogo di lavoro"      value={proc.mod10.workLocation} />
               <SummaryRow label="Expat"                value={proc.mod10.isExpat ? `Sì — ${proc.mod10.expatCountry}` : 'No'} />
@@ -932,6 +1044,86 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           )}
         </div>
       )}
+
+      {/* ── Stepper click modal ──────────────────────────────────────── */}
+      {stepModal && (() => {
+        const data = getStepClickData(stepModal);
+        if (!data) return null;
+        return (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 1050,
+              background: 'rgba(15,23,42,0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            onClick={e => { if (e.target === e.currentTarget) { setStepModal(null); setStepModalNotes(''); } }}
+          >
+            <div
+              className="card-cmcc"
+              style={{ width: 420, maxWidth: '92vw', padding: 28, position: 'relative' }}
+            >
+              <button
+                className="btn btn-cmcc-ghost"
+                style={{ position: 'absolute', top: 12, right: 12, padding: '4px 8px', fontSize: 14 }}
+                onClick={() => { setStepModal(null); setStepModalNotes(''); }}
+              >
+                <i className="bi bi-x-lg" />
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div
+                  style={{
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: '#295fa9', color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 16,
+                  }}
+                >
+                  <i className="bi bi-lightning-fill" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>{data.title}</div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>{data.desc}</div>
+                </div>
+              </div>
+              <textarea
+                className="form-control mb-3"
+                rows={3}
+                placeholder="Note opzionali (motivazione, osservazioni…)"
+                style={{ fontSize: 13, resize: 'none' }}
+                value={stepModalNotes}
+                onChange={e => setStepModalNotes(e.target.value)}
+              />
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  className="btn btn-cmcc-ghost"
+                  style={{ fontSize: 13 }}
+                  onClick={() => { setStepModal(null); setStepModalNotes(''); }}
+                >
+                  Annulla
+                </button>
+                {data.canReject && data.onReject && (
+                  <button
+                    className="btn btn-cmcc-danger"
+                    style={{ fontSize: 13 }}
+                    onClick={data.onReject}
+                  >
+                    <i className="bi bi-x-lg me-2" />
+                    Respingi
+                  </button>
+                )}
+                <button
+                  className="btn btn-cmcc-success"
+                  style={{ fontSize: 13 }}
+                  onClick={data.onApprove}
+                >
+                  <i className="bi bi-check-lg me-2" />
+                  {data.canReject ? 'Approva' : data.title}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
