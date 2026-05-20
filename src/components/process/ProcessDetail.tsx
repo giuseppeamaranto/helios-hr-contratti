@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { ContractProcess, UserRole, ProcessStatus, Approval } from '../../types';
-import { STATUS_CONFIG, OPERATION_LABELS, CONTRACT_TYPE_LABELS } from '../../data/mockData';
+import { STATUS_CONFIG, OPERATION_LABELS, CONTRACT_TYPE_LABELS, ROLE_LABELS, RESOURCES } from '../../data/mockData';
 import { StatusBadge } from '../ui/StatusBadge';
+import { avatarColor, initials } from '../../utils/avatar';
 
 interface Props {
   process: ContractProcess;
@@ -12,24 +13,53 @@ interface Props {
 
 type TabId = 'dettaglio' | 'documenti' | 'approvazioni' | 'storia';
 
-// ── Stepper definition ────────────────────────────────────────────────────────
+// ── Stepper definition (allineato al FlowChart CMCC) ────────────────────────
+// 13 step in pipeline + 2 stati terminali (annullato/respinto).
 const STEPS: { status: ProcessStatus | string; label: string }[] = [
-  { status: 'bozza',                  label: 'Bozza' },
-  { status: 'approvazione-rs',        label: 'Approv. RS' },
-  { status: 'approvazione-dir',       label: 'Approv. Dir.' },
-  { status: 'verifica-gru',           label: 'Verifica GRU' },
-  { status: 'elaborazione-gru',       label: 'Elaboraz. GRU' },
-  { status: 'lettera-presentazione',  label: 'Lettera Present.' },
-  { status: 'contratto-preparazione', label: 'Prep. Contratto' },
-  { status: 'contratto-firma',        label: 'Firma' },
-  { status: 'anagrafica',             label: 'Anagrafica' },
-  { status: 'zucchetti',              label: 'Zucchetti' },
-  { status: 'completato',             label: 'Completato' },
+  { status: 'bozza',                label: 'Bozza' },
+  { status: 'approvazione-rs',      label: 'Approv. Resp.' },
+  { status: 'verifica-gru',         label: 'Verifica HR' },
+  { status: 'approvazione-dir',     label: 'Approv. Dir.' },
+  { status: 'approvazione-organo',  label: 'Approv. Organo' },
+  { status: 'redazione',            label: 'Redazione' },
+  { status: 'anteprima',            label: 'Anteprima' },
+  { status: 'firma-presidente',     label: 'Firma Pres.' },
+  { status: 'protocollo',           label: 'Protocollo' },
+  { status: 'applicativi',          label: 'Applicativi' },
+  { status: 'anagrafica',           label: 'Anagrafica' },
+  { status: 'monitoraggio',         label: 'Monitoraggio' },
+  { status: 'completato',           label: 'Completato' },
 ];
 
+// Mappa di compatibilità: legacy status → step nuovo, per non rompere processi
+// salvati prima del refactor.
+const LEGACY_TO_NEW: Record<string, ProcessStatus> = {
+  'elaborazione-gru':       'redazione',
+  'lettera-presentazione':  'anteprima',
+  'contratto-preparazione': 'redazione',
+  'contratto-firma':        'firma-presidente',
+  'zucchetti':              'applicativi',
+};
+
+function normalizeStatus(s: string): string {
+  return LEGACY_TO_NEW[s] ?? s;
+}
+
 function getStepIndex(status: string): number {
-  const idx = STEPS.findIndex(s => s.status === status);
+  const norm = normalizeStatus(status);
+  const idx = STEPS.findIndex(s => s.status === norm);
   return idx >= 0 ? idx : -1;
+}
+
+/** Determina se uno step deve essere mostrato per un dato processo.
+ *  - Approv. Direttore + Approv. Organo sono saltati se importo < 1000 €. */
+function isStepApplicable(stepStatus: string, proc: ContractProcess): boolean {
+  const amount = proc.requestedAmount ?? 0;
+  const isLowAmount = amount > 0 && amount < 1000;
+  if (isLowAmount && (stepStatus === 'approvazione-dir' || stepStatus === 'approvazione-organo')) {
+    return false;
+  }
+  return true;
 }
 
 // ── Helper: format date ───────────────────────────────────────────────────────
@@ -56,29 +86,16 @@ function fmtDateTime(iso?: string): string {
   }
 }
 
-// ── Helper: avatar color based on name ───────────────────────────────────────
-function avatarColor(name: string): string {
-  const colors = ['#295fa9', '#059669', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#0f766e', '#4338ca'];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return colors[Math.abs(h) % colors.length];
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(' ');
-  return (parts[0]?.[0] ?? '') + (parts[parts.length - 1]?.[0] ?? '');
-}
-
-// ── Helper: role label ────────────────────────────────────────────────────────
 function roleLabel(role: string): string {
-  const map: Record<string, string> = {
-    rs: 'Responsabile Struttura', direttore: 'Direttore', gru: 'Ufficio GRU', amm: 'Amministrazione',
-  };
-  return map[role] ?? role;
+  return ROLE_LABELS[role] ?? role;
 }
 
 function roleChipClass(role: string): string {
-  const map: Record<string, string> = { rs: 'rs', direttore: 'dir', gru: 'gru', amm: 'amm' };
+  // mappa al CSS class esistente (rs/dir/gru/amm); i nuovi ruoli fallback a 'amm'
+  const map: Record<string, string> = {
+    rs: 'rs', direttore: 'dir', gru: 'gru', amm: 'amm',
+    presidente: 'dir', governance: 'dir', segreteria: 'amm',
+  };
   return `role-chip ${map[role] ?? ''}`;
 }
 
@@ -103,12 +120,48 @@ function docStatusLabel(status: string): string {
   return map[status] ?? status;
 }
 
-// ── Summary row ───────────────────────────────────────────────────────────────
-function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+// 2-col compact summary grid — usata nelle sezioni con molte coppie label/valore.
+function SummaryGrid({ items }: { items: { label: string; value: React.ReactNode }[] }) {
+  const visible = items.filter(it => it.value !== undefined && it.value !== null && it.value !== '');
   return (
-    <div className="summary-row">
-      <div className="summary-key">{label}</div>
-      <div className="summary-value">{value ?? '—'}</div>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: '4px 24px',
+        padding: '8px 16px 14px',
+      }}
+    >
+      {visible.map((it, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 10,
+            padding: '6px 0',
+            borderBottom: '1px dashed #e2e8f0',
+            minWidth: 0,
+          }}
+        >
+          <span style={{ color: '#64748b', fontWeight: 500, fontSize: 12, flexShrink: 0 }}>
+            {it.label}
+          </span>
+          <span
+            style={{
+              color: '#0f172a',
+              fontWeight: 600,
+              fontSize: 13,
+              textAlign: 'right',
+              wordBreak: 'break-word',
+              minWidth: 0,
+            }}
+          >
+            {it.value || '—'}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -161,24 +214,40 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
   const [approvalNotes, setApprovalNotes] = useState<Record<string, string>>({});
   const [stepModal, setStepModal]   = useState<ProcessStatus | null>(null);
   const [stepModalNotes, setStepModalNotes] = useState('');
+  // Posizione del popover ancorata alla bounding box dello step cliccato.
+  // null → popover renderizzato al centro (fallback).
+  const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null);
+  // Ricerca per il pannello di riconciliazione Zucchetti (anagrafica step).
+  const [zucchettiQuery, setZucchettiQuery] = useState('');
 
   const currentStepIdx = getStepIndex(proc.status);
 
   // ── Resource name display
   const resourceName = proc.resource?.fullName ?? proc.newResourceName ?? '—';
 
-  // ── Next status map (simple linear flow)
+  // ── Next status map — pipeline FlowChart CMCC con branching su importo.
+  // Se requestedAmount < 1000 € saltiamo Approv. Direttore + Approv. Organo
+  // (gate "Importo inferiore a 1000,00€?" del flowchart).
+  const lowAmount = (proc.requestedAmount ?? 0) > 0 && (proc.requestedAmount ?? 0) < 1000;
   const nextStatusMap: Partial<Record<ProcessStatus, ProcessStatus>> = {
-    'bozza':                   'approvazione-rs',
-    'approvazione-rs':         'approvazione-dir',
-    'approvazione-dir':        'verifica-gru',
-    'verifica-gru':            'elaborazione-gru',
-    'elaborazione-gru':        'lettera-presentazione',
-    'lettera-presentazione':   'contratto-preparazione',
-    'contratto-preparazione':  'contratto-firma',
-    'contratto-firma':         'anagrafica',
-    'anagrafica':              'zucchetti',
-    'zucchetti':               'completato',
+    'bozza':              'approvazione-rs',
+    'approvazione-rs':    'verifica-gru',
+    'verifica-gru':       lowAmount ? 'redazione' : 'approvazione-dir',
+    'approvazione-dir':   'approvazione-organo',
+    'approvazione-organo':'redazione',
+    'redazione':          'anteprima',
+    'anteprima':          'firma-presidente',
+    'firma-presidente':   'protocollo',
+    'protocollo':         'applicativi',
+    'applicativi':        'anagrafica',
+    'anagrafica':         'monitoraggio',
+    'monitoraggio':       'completato',
+    // legacy
+    'elaborazione-gru':       'anteprima',
+    'lettera-presentazione':  'firma-presidente',
+    'contratto-preparazione': 'firma-presidente',
+    'contratto-firma':        'protocollo',
+    'zucchetti':              'anagrafica',
   };
 
   function advanceStatus(to: ProcessStatus, actor: string, action: string, notes?: string) {
@@ -208,11 +277,11 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
         : a
     );
 
-    let newStatus: ProcessStatus = proc.status;
+    let newStatus: ProcessStatus = normalizeStatus(proc.status) as ProcessStatus;
     let action = '';
 
     if (approved) {
-      const next = nextStatusMap[proc.status];
+      const next = nextStatusMap[normalizeStatus(proc.status) as ProcessStatus];
       if (next) { newStatus = next; }
       action = `Approvato da ${roleLabel(approval.role)}`;
     } else {
@@ -287,31 +356,97 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
   };
 
   function getStepClickData(stepStatus: string): StepClickData | null {
-    if (proc.status !== stepStatus) return null;
     const isAdmin = currentRole === 'amm';
-    const actor = isAdmin ? 'Ufficio AMM (override)' : proc.requestedBy;
-    const closeModal = () => { setStepModal(null); setStepModalNotes(''); };
-    const adminDesc = isAdmin ? ' (Admin — bypass ruolo)' : '';
+    const targetIdx = getStepIndex(stepStatus);
+    const isCurrent = normalizeStatus(proc.status) === normalizeStatus(stepStatus);
+    const isPast    = targetIdx >= 0 && targetIdx < currentStepIdx;
+    const isFuture  = targetIdx > currentStepIdx;
+    const actor = isAdmin
+      ? 'Ufficio AMM (override)'
+      : `${proc.requestedBy} (${roleLabel(currentRole)})`;
+    const closeModal = () => { setStepModal(null); setStepModalNotes(''); setPopoverAnchor(null); };
 
-    switch (stepStatus as ProcessStatus) {
+    // ── PAST step → riapertura/rollback ────────────────────────────────────
+    // Cliccando su uno step già completato si può riportare il processo a
+    // quella fase (utile per correzioni). Tracciato in history come riapertura.
+    if (isPast) {
+      const targetStatus = stepStatus as ProcessStatus;
+      return {
+        title: `Riapri "${STEPS[targetIdx].label}"`,
+        desc: 'Riporta il processo a questo step (rollback). Le azioni successive andranno rifatte.',
+        canReject: false,
+        onApprove: () => {
+          advanceStatus(targetStatus, actor, `Riapertura step "${STEPS[targetIdx].label}"`, stepModalNotes || undefined);
+          closeModal();
+        },
+      };
+    }
+
+    // ── FUTURE step → salto in avanti (qualsiasi ruolo) ────────────────────
+    // Marca come approvate tutte le approvazioni pendenti tra qui e il target.
+    if (isFuture) {
+      const targetStatus = stepStatus as ProcessStatus;
+      return {
+        title: `Salta a "${STEPS[targetIdx].label}"`,
+        desc: 'Avanza direttamente a questo step. Le approvazioni intermedie pendenti vengono marcate come approvate.',
+        canReject: true,
+        onApprove: () => {
+          const now = new Date().toISOString();
+          const newApprovals = proc.approvals.map(a =>
+            a.status === 'pending'
+              ? { ...a, status: 'approved' as const, timestamp: now, notes: `(skip via ${roleLabel(currentRole)})` }
+              : a
+          );
+          const newHistory = [
+            ...proc.history,
+            {
+              id: `H${proc.history.length + 1}`,
+              timestamp: now,
+              action: `Salto manuale a "${STEPS[targetIdx].label}"`,
+              actor,
+              actorRole: roleLabel(currentRole),
+              notes: stepModalNotes || undefined,
+              toStatus: targetStatus,
+            },
+          ];
+          onUpdate({ status: targetStatus, approvals: newApprovals, updatedAt: now, history: newHistory });
+          closeModal();
+        },
+        onReject: () => {
+          advanceStatus('respinto', actor, 'Processo respinto', stepModalNotes || undefined);
+          closeModal();
+        },
+      };
+    }
+
+    // ── CURRENT step → azione contestuale per status ───────────────────────
+    // Niente gating per ruolo: ogni ruolo può agire (le restrizioni sono solo
+    // narrative, non operative — questa è una demo/mockup). L'history traccia
+    // chi ha agito e con che ruolo.
+    const adminDesc = isAdmin ? ' (override AMM)' : '';
+    const next = nextStatusMap[normalizeStatus(proc.status) as ProcessStatus];
+
+    switch (normalizeStatus(stepStatus) as ProcessStatus) {
+      // 0. BOZZA → Submit (o annulla la bozza)
       case 'bozza':
-        if (currentRole !== 'rs' && !isAdmin) return null;
         return {
           title: 'Invia per Approvazione',
-          desc: `Il processo verrà inviato per la prima approvazione RS.${adminDesc}`,
-          canReject: false,
+          desc: `Il processo verrà inviato al Responsabile di Struttura.${adminDesc}`,
+          canReject: true,
           onApprove: () => { advanceStatus('approvazione-rs', actor, 'Processo inviato per approvazione RS', stepModalNotes || undefined); closeModal(); },
+          onReject:  () => { advanceStatus('annullato',     actor, 'Bozza annullata',                       stepModalNotes || undefined); closeModal(); },
         };
+
+      // 1. APPROV. RESP. (Divisione → autorizza richiesta)
       case 'approvazione-rs': {
-        if (currentRole !== 'rs' && !isAdmin) return null;
         const appr = proc.approvals.find(a => a.role === 'rs' && a.status === 'pending');
         return {
-          title: 'Approvazione RS',
-          desc: `Approva o respingi la richiesta.${adminDesc}`,
+          title: 'Approvazione Responsabile',
+          desc: `Autorizza la richiesta di contratto.${adminDesc}`,
           canReject: true,
           onApprove: () => {
             if (appr) handleApproval(appr, true, stepModalNotes || undefined);
-            else advanceStatus('approvazione-dir', actor, 'Approvazione RS — override AMM', stepModalNotes || undefined);
+            else advanceStatus(next!, actor, 'Approv. RS — override AMM', stepModalNotes || undefined);
             closeModal();
           },
           onReject: () => {
@@ -321,84 +456,217 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           },
         };
       }
+
+      // 2. VERIFICA HR ADMIN (HR Admin riceve doc, archivia, prepara prospetti)
+      case 'verifica-gru':
+        return {
+          title: 'Verifica HR Admin',
+          desc: lowAmount
+            ? `Importo < 1000 €: si salta l'organo di competenza, si va direttamente a Redazione.${adminDesc}`
+            : `Conferma la verifica dei documenti e prepara i prospetti per l'organo.${adminDesc}`,
+          canReject: true,
+          onApprove: () => { advanceStatus(next!, isAdmin ? actor : 'HR Admin', 'Verifica HR Admin completata', stepModalNotes || undefined); closeModal(); },
+          onReject:  () => { advanceStatus('respinto', actor, 'Verifica HR Admin respinta', stepModalNotes || undefined); closeModal(); },
+        };
+
+      // 3. APPROV. DIR. ESEC. (skippato se <1000€)
       case 'approvazione-dir': {
-        if (currentRole !== 'direttore' && !isAdmin) return null;
         const appr = proc.approvals.find(a => a.role === 'direttore' && a.status === 'pending');
         return {
-          title: 'Approvazione Direttore',
-          desc: `Approva o respingi la richiesta come Direttore.${adminDesc}`,
+          title: 'Approvazione Direttore Esecutivo',
+          desc: `Approva o respingi la richiesta come Direttore Esecutivo.${adminDesc}`,
           canReject: true,
           onApprove: () => {
             if (appr) handleApproval(appr, true, stepModalNotes || undefined);
-            else advanceStatus('verifica-gru', actor, 'Approvazione Direttore — override AMM', stepModalNotes || undefined);
+            else advanceStatus(next!, actor, 'Approv. Direttore — override AMM', stepModalNotes || undefined);
             closeModal();
           },
           onReject: () => {
             if (appr) handleApproval(appr, false, stepModalNotes || undefined);
-            else advanceStatus('respinto', actor, 'Processo respinto in fase Direttore — override AMM', stepModalNotes || undefined);
+            else advanceStatus('respinto', actor, 'Processo respinto dal Direttore — override AMM', stepModalNotes || undefined);
             closeModal();
           },
         };
       }
-      case 'verifica-gru':
-        if (currentRole !== 'gru' && !isAdmin) return null;
+
+      // 4. APPROV. ORGANO (CE se Direzione Scientifica, altrimenti Governance/CdA)
+      case 'approvazione-organo': {
+        const appr = proc.approvals.find(a => a.role === 'governance' && a.status === 'pending');
+        const organo = proc.isDirezioneScientifica ? 'Comitato Esecutivo (CE)' : 'Governance (CdA)';
         return {
-          title: 'Verifica GRU',
-          desc: `Conferma di aver verificato la documentazione e avanza il processo.${adminDesc}`,
-          canReject: false,
-          onApprove: () => { advanceStatus('elaborazione-gru', isAdmin ? actor : 'Team GRU', 'Verifica GRU completata', stepModalNotes || undefined); closeModal(); },
-        };
-      case 'elaborazione-gru':
-        if (currentRole !== 'gru' && !isAdmin) return null;
-        return {
-          title: 'Elaborazione GRU',
-          desc: `Conferma il completamento dell'elaborazione GRU.${adminDesc}`,
-          canReject: false,
-          onApprove: () => { advanceStatus('lettera-presentazione', isAdmin ? actor : 'Team GRU', 'Elaborazione GRU completata', stepModalNotes || undefined); closeModal(); },
-        };
-      case 'lettera-presentazione':
-        if (currentRole !== 'gru' && !isAdmin) return null;
-        return {
-          title: 'Lettera di Presentazione',
-          desc: `Conferma l'invio della lettera di presentazione alla risorsa.${adminDesc}`,
-          canReject: false,
-          onApprove: () => { advanceStatus('contratto-preparazione', isAdmin ? actor : 'Team GRU', 'Lettera di presentazione inviata', stepModalNotes || undefined); closeModal(); },
-        };
-      case 'contratto-preparazione':
-        return {
-          title: 'Preparazione Contratto',
-          desc: `Invia il contratto per la firma delle parti.${adminDesc}`,
-          canReject: false,
-          onApprove: () => { advanceStatus('contratto-firma', 'Ufficio AMM', 'Contratto inviato per firma', stepModalNotes || undefined); closeModal(); },
-        };
-      case 'contratto-firma':
-        return {
-          title: 'Firma Contratto',
-          desc: 'Segna il contratto come firmato da tutte le parti.',
-          canReject: false,
-          onApprove: () => { advanceStatus('anagrafica', 'Sistema', 'Contratto firmato da tutte le parti', stepModalNotes || undefined); closeModal(); },
-        };
-      case 'anagrafica':
-        if (!allModsSubmitted && !isAdmin) return null;
-        return {
-          title: 'Avanza ad Anagrafica → Zucchetti',
-          desc: allModsSubmitted
-            ? 'Tutti i moduli sono stati inviati. Avanza il processo alla fase Zucchetti.'
-            : `Avanzamento forzato alla fase Zucchetti.${adminDesc}`,
-          canReject: false,
+          title: `Approvazione Organo — ${organo}`,
+          desc: `Decisione finale dell'organo di competenza.${adminDesc}`,
+          canReject: true,
           onApprove: () => {
-            advanceStatus('zucchetti', isAdmin ? actor : 'Ufficio AMM', 'Fase anagrafica completata — avanzamento a Zucchetti', stepModalNotes || undefined);
+            if (appr) handleApproval(appr, true, stepModalNotes || `Approvato da ${organo}`);
+            else advanceStatus(next!, actor, `Approvato da ${organo} — override AMM`, stepModalNotes || undefined);
+            closeModal();
+          },
+          onReject: () => {
+            if (appr) handleApproval(appr, false, stepModalNotes || `Respinto da ${organo}`);
+            else advanceStatus('respinto', actor, `Respinto da ${organo} — override AMM`, stepModalNotes || undefined);
             closeModal();
           },
         };
-      case 'zucchetti':
-        if (!isAdmin) return null;
+      }
+
+      // 5. REDAZIONE — HR Admin redige il contratto; sotto-task Babbo per subordinati
+      case 'redazione':
         return {
-          title: 'Caricamento Zucchetti',
-          desc: `Carica i dati su Zucchetti e completa il processo.${adminDesc}`,
-          canReject: false,
-          onApprove: () => { handleZucchetti(); closeModal(); },
+          title: 'Redazione Contratto',
+          desc: proc.contractCategory === 'subordinato'
+            ? `Contratto subordinato → ricordati di inviare info allo studio esterno (Babbo).${adminDesc}`
+            : `Completa la redazione del contratto e passa all'anteprima.${adminDesc}`,
+          canReject: true,
+          onApprove: () => {
+            const now = new Date().toISOString();
+            const upd: Partial<ContractProcess> = {
+              status: 'anteprima',
+              updatedAt: now,
+              previewStatus: 'pending',
+              history: [...proc.history, {
+                id: `H${proc.history.length + 1}`,
+                timestamp: now,
+                action: 'Contratto redatto — inviata anteprima alla risorsa',
+                actor: isAdmin ? actor : 'HR Admin',
+                actorRole: 'HR Admin',
+                notes: stepModalNotes || undefined,
+                toStatus: 'anteprima',
+              }],
+            };
+            onUpdate(upd);
+            closeModal();
+          },
+          onReject: () => { advanceStatus('respinto', actor, 'Redazione contratto interrotta', stepModalNotes || undefined); closeModal(); },
         };
+
+      // 6. ANTEPRIMA RISORSA — può tornare a Redazione se modifiche segnalate
+      case 'anteprima':
+        return {
+          title: 'Anteprima alla Risorsa',
+          desc: `Conferma se la risorsa ha approvato l'anteprima del contratto.${adminDesc}`,
+          canReject: true,   // "Respingi" = la risorsa ha chiesto modifiche → torna a redazione
+          onApprove: () => {
+            advanceStatus(next!, isAdmin ? actor : 'HR Admin', 'Risorsa ha approvato l\'anteprima — in firma al Presidente', stepModalNotes || undefined);
+            onUpdate({ previewStatus: 'approved' });
+            closeModal();
+          },
+          onReject: () => {
+            const now = new Date().toISOString();
+            onUpdate({
+              status: 'redazione',
+              previewStatus: 'changes',
+              previewNotes: stepModalNotes || 'Modifiche richieste dalla risorsa',
+              updatedAt: now,
+              history: [...proc.history, {
+                id: `H${proc.history.length + 1}`,
+                timestamp: now,
+                action: 'Modifiche segnalate dalla risorsa — ritorno a Redazione',
+                actor: isAdmin ? actor : 'HR Admin',
+                actorRole: 'HR Admin',
+                notes: stepModalNotes || undefined,
+                toStatus: 'redazione',
+              }],
+            });
+            closeModal();
+          },
+        };
+
+      // 7. FIRMA PRESIDENTE
+      case 'firma-presidente': {
+        const appr = proc.approvals.find(a => a.role === 'presidente' && a.status === 'pending');
+        return {
+          title: 'Firma del Presidente',
+          desc: `Segna il contratto come firmato dal Presidente.${adminDesc}`,
+          canReject: true,
+          onApprove: () => {
+            if (appr) handleApproval(appr, true, stepModalNotes || 'Contratto firmato dal Presidente');
+            else advanceStatus(next!, actor, 'Firma Presidente — override AMM', stepModalNotes || undefined);
+            closeModal();
+          },
+          onReject: () => {
+            if (appr) handleApproval(appr, false, stepModalNotes || 'Firma negata dal Presidente');
+            else advanceStatus('respinto', actor, 'Firma Presidente negata', stepModalNotes || undefined);
+            closeModal();
+          },
+        };
+      }
+
+      // 8. PROTOCOLLO (Segreteria/Dorella)
+      case 'protocollo':
+        return {
+          title: 'Protocollo Segreteria',
+          desc: `Assegna numero di protocollo e archivia il contratto firmato.${adminDesc}`,
+          canReject: true,
+          onReject: () => { advanceStatus('respinto', actor, 'Protocollazione respinta', stepModalNotes || undefined); closeModal(); },
+          onApprove: () => {
+            const now = new Date().toISOString();
+            const protocolNumber = `PROT-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+            onUpdate({
+              status: 'applicativi',
+              protocolNumber,
+              updatedAt: now,
+              history: [...proc.history, {
+                id: `H${proc.history.length + 1}`,
+                timestamp: now,
+                action: `Protocollato — Nr. ${protocolNumber}`,
+                actor: isAdmin ? actor : 'Segreteria',
+                actorRole: 'Segreteria',
+                notes: stepModalNotes || undefined,
+                toStatus: 'applicativi',
+              }],
+            });
+            closeModal();
+          },
+        };
+
+      // 9. APPLICATIVI (Zucchetti, Helios/SAP)
+      case 'applicativi':
+        return {
+          title: 'Inserimento Applicativi',
+          desc: `Inserisci i dati in Zucchetti / Helios / SAP.${adminDesc}`,
+          canReject: true,
+          onApprove: () => { handleZucchetti(); closeModal(); },
+          onReject:  () => { advanceStatus('respinto', actor, 'Inserimento applicativi sospeso', stepModalNotes || undefined); closeModal(); },
+        };
+
+      // 10. ANAGRAFICA (MOD13/138/102/14 + riconciliazione Zucchetti)
+      case 'anagrafica': {
+        const needsReconcile = proc.isNewResource && !proc.zucchettiReconciled;
+        const blocked = needsReconcile;
+        const desc = blocked
+          ? `Nuovo assunto non ancora riconciliato con Zucchetti/DossierRisorse: collega prima l'anagrafica dal pannello qui sotto.${adminDesc}`
+          : allModsSubmitted
+            ? 'Tutti i moduli inviati. Apri il monitoraggio post-firma.'
+            : `Attenzione: alcuni moduli non sono ancora stati inviati. Forzando si avanza comunque.${adminDesc}`;
+        return {
+          title: 'Anagrafica → Monitoraggio',
+          desc,
+          canReject: true,
+          onApprove: () => {
+            if (blocked && !isAdmin) return;  // gate: solo AMM può forzare
+            advanceStatus('monitoraggio', actor, 'Anagrafica completata — monitoraggio attivo', stepModalNotes || undefined);
+            closeModal();
+          },
+          onReject: () => { advanceStatus('respinto', actor, 'Fase anagrafica respinta', stepModalNotes || undefined); closeModal(); },
+        };
+      }
+
+      // 11. MONITORAGGIO — chiude con monitoringEndDate (data scadenza)
+      case 'monitoraggio':
+        return {
+          title: 'Chiudi Processo',
+          desc: `Imposta la data di scadenza per la notifica di proroga e chiudi il processo.${adminDesc}`,
+          canReject: true,
+          onApprove: () => {
+            const monitoringEndDate = proc.mod09?.endDate || proc.mod10?.endDate || proc.resource?.endDate;
+            advanceStatus('completato', isAdmin ? actor : 'Sistema', 'Processo completato — monitoraggio scadenza attivo', stepModalNotes || undefined);
+            if (monitoringEndDate) onUpdate({ monitoringEndDate });
+            closeModal();
+          },
+          onReject: () => { advanceStatus('respinto', actor, 'Monitoraggio interrotto', stepModalNotes || undefined); closeModal(); },
+        };
+
       default:
         return null;
     }
@@ -537,8 +805,15 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
 
       {/* ── Stepper ──────────────────────────────────────────────────── */}
       <div className="card-cmcc" style={{ padding: '20px 24px', marginBottom: 20 }}>
+        {currentRole === 'amm' && (
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+            <i className="bi bi-shield-lock me-2" style={{ color: '#f1a20e' }} />
+            Modalità <strong>AMM (admin)</strong>: clicca uno step futuro per saltare direttamente a quella fase.
+          </div>
+        )}
         <div className="process-stepper">
           {STEPS.map((step, idx) => {
+            const skipped = !isStepApplicable(step.status, proc); // skip Dir.+Organo se <1000€
             let stepState: 'done' | 'active' | '' = '';
             if (proc.status === 'annullato' || proc.status === 'respinto') {
               stepState = '';
@@ -548,6 +823,9 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
               stepState = 'active';
             }
 
+            // Ogni step è cliccabile, anche se il processo è in stato
+            // terminale (respinto/annullato): in tal caso il click su uno step
+            // serve a "revocare" e riportare il processo a quella fase.
             const clickData = getStepClickData(step.status);
             const isClickable = !!clickData;
 
@@ -555,30 +833,72 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
               <div
                 key={step.status}
                 className={`step-item${stepState ? ' ' + stepState : ''}${isClickable ? ' step-item-clickable' : ''}`}
-                onClick={isClickable ? () => setStepModal(step.status as ProcessStatus) : undefined}
-                style={isClickable ? { cursor: 'pointer' } : undefined}
-                title={isClickable ? `Azione: ${clickData!.title}` : undefined}
+                onClick={isClickable ? (e) => {
+                  setStepModal(step.status as ProcessStatus);
+                  setPopoverAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+                } : undefined}
+                style={{
+                  ...(isClickable ? { cursor: 'pointer' } : undefined),
+                  ...(skipped ? { opacity: 0.35 } : undefined),
+                }}
+                title={
+                  skipped ? `Step saltato (importo < 1000 €)`
+                  : isClickable ? `Azione: ${clickData!.title}` : undefined
+                }
               >
                 <div className={`step-circle${isClickable ? ' step-circle-clickable' : ''}`}>
-                  {stepState === 'done'
+                  {skipped
+                    ? <i className="bi bi-dash" />
+                    : stepState === 'done'
                     ? <i className="bi bi-check" />
                     : isClickable
                     ? <i className="bi bi-lightning-fill" style={{ fontSize: 11 }} />
                     : <span>{idx}</span>
                   }
                 </div>
-                <div className="step-label">{step.label}</div>
+                <div className="step-label">{step.label}{skipped && <div style={{ fontSize: 9, fontStyle: 'italic' }}>(skip)</div>}</div>
               </div>
             );
           })}
         </div>
 
-        {(proc.status === 'annullato' || proc.status === 'respinto') && (
-          <div className="alert-cmcc danger mt-2" style={{ marginBottom: 0 }}>
-            <i className={`bi ${proc.status === 'annullato' ? 'bi-x-circle-fill' : 'bi-x-octagon-fill'} me-2`} />
-            Processo <strong>{proc.status === 'annullato' ? 'annullato' : 'respinto'}</strong>.
-          </div>
-        )}
+        {(proc.status === 'annullato' || proc.status === 'respinto') && (() => {
+          // Recupera l'ultimo stato non-terminale dalla history per la revoca.
+          const lastNonTerminal = [...proc.history].reverse().find(h =>
+            h.toStatus && h.toStatus !== 'annullato' && h.toStatus !== 'respinto'
+          );
+          const restoreTo = lastNonTerminal?.toStatus ?? 'bozza';
+          const handleRevoke = () => {
+            const now = new Date().toISOString();
+            advanceStatus(
+              restoreTo,
+              `${proc.requestedBy} (${roleLabel(currentRole)})`,
+              `Revoca ${proc.status} — ripristino a "${STATUS_CONFIG[restoreTo]?.label ?? restoreTo}"`,
+              undefined,
+            );
+            void now;
+          };
+          return (
+            <div
+              className="alert-cmcc danger mt-2"
+              style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <i className={`bi ${proc.status === 'annullato' ? 'bi-x-circle-fill' : 'bi-x-octagon-fill'} me-2`} />
+                Processo <strong>{proc.status === 'annullato' ? 'annullato' : 'respinto'}</strong>.
+                Puoi revocare e tornare allo step precedente, oppure cliccare uno step nella pipeline per riaprire.
+              </div>
+              <button
+                className="btn btn-cmcc-secondary"
+                style={{ fontSize: 12, padding: '5px 14px', flexShrink: 0 }}
+                onClick={handleRevoke}
+              >
+                <i className="bi bi-arrow-counterclockwise me-2" />
+                Revoca {proc.status === 'annullato' ? 'annullamento' : 'rifiuto'}
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────── */}
@@ -616,62 +936,124 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
       {/* ── Tab: Dettaglio ───────────────────────────────────────────── */}
       {activeTab === 'dettaglio' && (
         <div>
-          {/* Informazioni richiesta */}
+          {/* HR Portal - Costs (placeholder) — punto 7 ─────────────────────── */}
+          <div
+            className="card-cmcc mb-3"
+            style={{
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              background: 'linear-gradient(90deg, #f1a20e10, #295fa908)',
+              borderLeft: '4px solid #f1a20e',
+            }}
+          >
+            <i className="bi bi-graph-up-arrow" style={{ fontSize: 22, color: '#f1a20e' }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>
+                HR Portal — Costs
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>
+                Cruscotto costi del contratto (allocazione su progetti, scadenze, oneri).
+                <span className="tag tag-gray ms-2" style={{ fontSize: 9 }}>placeholder</span>
+              </div>
+            </div>
+            <a
+              href="#"
+              className="btn btn-cmcc-secondary"
+              style={{ fontSize: 12, padding: '6px 14px', flexShrink: 0 }}
+              onClick={e => { e.preventDefault(); /* placeholder: collegare URL reale */ }}
+              title={`Apri HR Portal - Costs per ${proc.id}`}
+            >
+              <i className="bi bi-box-arrow-up-right me-2" />
+              Apri Costs
+            </a>
+          </div>
+
+          {/* Informazioni richiesta — layout grid 2-col (punto 6) ──────────── */}
           <div className="summary-section card-cmcc mb-3">
             <SectionHeader icon="bi-file-earmark-text" title="Informazioni Richiesta" />
-            <SummaryRow label="ID Processo"      value={<span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{proc.id}</span>} />
-            <SummaryRow label="Tipo Operazione"  value={OPERATION_LABELS[proc.operationType] ?? proc.operationType} />
-            <SummaryRow label="Richiedente"      value={proc.requestedBy} />
-            <SummaryRow label="Email richiedente" value={proc.requestedByEmail} />
-            <SummaryRow label="Unità"            value={proc.unitName} />
-            <SummaryRow label="Progetto"         value={`${proc.projectCode} — ${proc.projectName}`} />
-            <SummaryRow label="Centro di Costo"  value={proc.costCenter} />
-            <SummaryRow label="Urgente"          value={proc.isUrgent ? <span className="tag tag-amber">Sì</span> : 'No'} />
-            {proc.notes && <SummaryRow label="Note" value={proc.notes} />}
-            {proc.contractType && (
-              <SummaryRow label="Tipo Contratto" value={CONTRACT_TYPE_LABELS[proc.contractType] ?? proc.contractType} />
-            )}
-            {proc.contractCategory && (
-              <SummaryRow label="Categoria"      value={proc.contractCategory === 'subordinato' ? 'Subordinato' : 'Non Subordinato'} />
-            )}
-            {proc.modType && (
-              <SummaryRow label="Modulo"         value={proc.modType.toUpperCase()} />
+            <SummaryGrid items={[
+              { label: 'ID Processo',     value: <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{proc.id}</span> },
+              { label: 'Tipo Operazione', value: OPERATION_LABELS[proc.operationType] ?? proc.operationType },
+              { label: 'Richiedente',     value: proc.requestedBy },
+              { label: 'Email richiedente', value: proc.requestedByEmail },
+              { label: 'Unità Organizzativa', value: proc.unitName },
+              { label: 'Progetto',        value: `${proc.projectCode} — ${proc.projectName}` },
+              { label: 'Centro di Costo', value: proc.costCenter },
+              { label: 'Urgente',         value: proc.isUrgent ? <span className="tag tag-amber">Sì</span> : 'No' },
+              ...(proc.contractType ? [{ label: 'Tipo Contratto', value: CONTRACT_TYPE_LABELS[proc.contractType] ?? proc.contractType }] : []),
+              ...(proc.contractCategory ? [{ label: 'Categoria', value: proc.contractCategory === 'subordinato' ? 'Subordinato' : 'Non Subordinato' }] : []),
+              ...(proc.modType ? [{ label: 'Modulo', value: proc.modType.toUpperCase() }] : []),
+              ...(proc.requestedAmount ? [{
+                label: 'Importo annuo',
+                value: (
+                  <span>
+                    {proc.requestedAmount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+                    {proc.requestedAmount < 1000 && <span className="tag tag-gray ms-2" style={{ fontSize: 10 }}>&lt; 1000 € — skip Dir./Organo</span>}
+                  </span>
+                ),
+              }] : []),
+              ...(proc.contractAction ? [{
+                label: 'Effetto sul contratto',
+                value: (
+                  <span>
+                    <span className={`tag ${proc.contractAction === 'new-contract' ? 'tag-amber' : 'tag-blue'}`}>
+                      <i className={`bi ${proc.contractAction === 'new-contract' ? 'bi-file-earmark-plus' : 'bi-pencil-square'} me-1`} />
+                      {proc.contractAction === 'new-contract' ? 'Nuovo contratto' : 'Modifica contratto'}
+                    </span>
+                    {!!proc.interruptionDays && proc.interruptionDays > 0 && (
+                      <span className="tag tag-gray ms-2" style={{ fontSize: 10 }}>
+                        {proc.interruptionDays}gg interruzione
+                      </span>
+                    )}
+                  </span>
+                ),
+              }] : []),
+              { label: 'Organo competente', value: proc.isDirezioneScientifica ? 'Comitato Esecutivo (CE)' : 'Governance (CdA)' },
+              ...(proc.protocolNumber ? [{ label: 'Nr. Protocollo', value: <span style={{ fontFamily: 'monospace' }}>{proc.protocolNumber}</span> }] : []),
+              ...(proc.monitoringEndDate ? [{ label: 'Scadenza monitorata', value: fmt(proc.monitoringEndDate) }] : []),
+            ]} />
+            {proc.notes && (
+              <div style={{ padding: '4px 16px 12px', fontSize: 12, color: '#64748b' }}>
+                <strong>Note:</strong> {proc.notes}
+              </div>
             )}
           </div>
 
-          {/* Risorsa */}
+          {/* Risorsa — layout grid 2-col compatto */}
           <div className="summary-section card-cmcc mb-3">
             <SectionHeader icon="bi-person-circle" title="Risorsa" />
             {proc.isNewResource ? (
-              <>
-                <SummaryRow label="Nome"   value={<><span className="tag tag-green me-2">Nuovo</span>{proc.newResourceName}</>} />
-                <SummaryRow label="Email"  value={proc.newResourceEmail} />
-              </>
+              <SummaryGrid items={[
+                { label: 'Nome',  value: <><span className="tag tag-green me-2">Nuovo</span>{proc.newResourceName}</> },
+                { label: 'Email', value: proc.newResourceEmail },
+              ]} />
             ) : proc.resource ? (
-              <>
-                <SummaryRow label="Nome completo"      value={proc.resource.fullName} />
-                <SummaryRow label="Email istituzionale" value={proc.resource.email} />
-                {proc.resource.emailPrivate && <SummaryRow label="Email privata" value={proc.resource.emailPrivate} />}
-                <SummaryRow label="Codice Fiscale"     value={<span style={{ fontFamily: 'monospace' }}>{proc.resource.cf}</span>} />
-                <SummaryRow label="Data di nascita"    value={fmt(proc.resource.birthDate)} />
-                <SummaryRow label="Paese nascita"      value={proc.resource.birthCountry} />
-                <SummaryRow label="Paese residenza"    value={proc.resource.residenceCountry} />
-                <SummaryRow label="Unità"              value={proc.resource.unit} />
-                <SummaryRow label="Sede"               value={proc.resource.sede} />
-                <SummaryRow label="Professione"        value={proc.resource.profession} />
-                <SummaryRow label="Qualifica Prof."    value={proc.resource.qualProf} />
-                <SummaryRow label="Titolo di studio"   value={proc.resource.study} />
-                <SummaryRow label="Tipo Contratto att." value={proc.resource.contractType} />
-                <SummaryRow label="Natura Contratto"   value={proc.resource.contractNature} />
-                <SummaryRow label="CCNL"               value={proc.resource.ccnl} />
-                {proc.resource.ccnlLevel && <SummaryRow label="Livello CCNL" value={proc.resource.ccnlLevel} />}
-                <SummaryRow label="Part-time"          value={proc.resource.isPartTime ? `Sì — ${proc.resource.partTimePercent}%` : 'No'} />
-                <SummaryRow label="UE"                 value={proc.resource.isEU ? 'Sì' : 'No'} />
-                <SummaryRow label="Inizio contratto"   value={fmt(proc.resource.startDate)} />
-                {proc.resource.endDate && <SummaryRow label="Fine contratto" value={fmt(proc.resource.endDate)} />}
-              </>
+              <SummaryGrid items={[
+                { label: 'Nome completo',       value: proc.resource.fullName },
+                { label: 'Email istituzionale', value: proc.resource.email },
+                ...(proc.resource.emailPrivate ? [{ label: 'Email privata', value: proc.resource.emailPrivate }] : []),
+                { label: 'Codice Fiscale',      value: <span style={{ fontFamily: 'monospace' }}>{proc.resource.cf}</span> },
+                { label: 'Data di nascita',     value: fmt(proc.resource.birthDate) },
+                { label: 'Paese nascita',       value: proc.resource.birthCountry },
+                { label: 'Paese residenza',     value: proc.resource.residenceCountry },
+                { label: 'Unità',               value: proc.resource.unit },
+                { label: 'Sede',                value: proc.resource.sede },
+                { label: 'Professione',         value: proc.resource.profession },
+                { label: 'Qualifica Prof.',     value: proc.resource.qualProf },
+                { label: 'Titolo di studio',    value: proc.resource.study },
+                { label: 'Tipo Contratto att.', value: proc.resource.contractType },
+                { label: 'Natura Contratto',    value: proc.resource.contractNature },
+                { label: 'CCNL',                value: proc.resource.ccnl },
+                ...(proc.resource.ccnlLevel ? [{ label: 'Livello CCNL', value: proc.resource.ccnlLevel }] : []),
+                { label: 'Part-time',           value: proc.resource.isPartTime ? `Sì — ${proc.resource.partTimePercent}%` : 'No' },
+                { label: 'UE',                  value: proc.resource.isEU ? 'Sì' : 'No' },
+                { label: 'Inizio contratto',    value: fmt(proc.resource.startDate) },
+                ...(proc.resource.endDate ? [{ label: 'Fine contratto', value: fmt(proc.resource.endDate) }] : []),
+              ]} />
             ) : (
-              <div className="summary-row" style={{ color: '#64748b', fontStyle: 'italic' }}>
+              <div style={{ padding: '14px 16px', color: '#64748b', fontStyle: 'italic', fontSize: 13 }}>
                 Nessuna risorsa associata
               </div>
             )}
@@ -681,19 +1063,21 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           {proc.modType === 'mod09' && proc.mod09 && (
             <div className="summary-section card-cmcc mb-3">
               <SectionHeader icon="bi-file-earmark-text" title="Dati Contratto MOD09" />
-              <SummaryRow label="Tipo Contratto"       value={proc.mod09.contractTypeMod09} />
-              <SummaryRow label="Oggetto Attività"     value={proc.mod09.activityObject} />
-              <SummaryRow label="Deliverable"          value={proc.mod09.deliverables} />
-              <SummaryRow label="Data Inizio"          value={fmt(proc.mod09.startDate)} />
-              <SummaryRow label="Data Fine"            value={fmt(proc.mod09.endDate)} />
-              <SummaryRow label="Compenso Lordo (€/mese)"
-                value={proc.mod09.grossCompensation.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
-              />
-              <SummaryRow label="Cadenza Pagamento"    value={proc.mod09.paymentSchedule} />
-              <SummaryRow label="IVA"                  value={proc.mod09.vatRequired ? `Sì — P.IVA ${proc.mod09.vatNumber}` : 'Non richiesta'} />
-              <SummaryRow label="Luogo di lavoro"      value={proc.mod09.workLocation} />
-              <SummaryRow label="Strumenti forniti"    value={proc.mod09.tools} />
-              <SummaryRow label="Riferisce a"          value={proc.mod09.reportTo} />
+              <SummaryGrid items={[
+                { label: 'Tipo Contratto',          value: proc.mod09.contractTypeMod09 },
+                { label: 'Data Inizio',             value: fmt(proc.mod09.startDate) },
+                { label: 'Data Fine',               value: fmt(proc.mod09.endDate) },
+                { label: 'Compenso Lordo (€/mese)', value: proc.mod09.grossCompensation.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' }) },
+                { label: 'Cadenza Pagamento',       value: proc.mod09.paymentSchedule },
+                { label: 'IVA',                     value: proc.mod09.vatRequired ? `Sì — P.IVA ${proc.mod09.vatNumber}` : 'Non richiesta' },
+                { label: 'Luogo di lavoro',         value: proc.mod09.workLocation },
+                { label: 'Riferisce a',             value: proc.mod09.reportTo },
+              ]} />
+              <div style={{ padding: '4px 16px 14px', fontSize: 12, color: '#64748b' }}>
+                <div><strong>Oggetto Attività:</strong> {proc.mod09.activityObject || '—'}</div>
+                {proc.mod09.deliverables && <div style={{ marginTop: 4 }}><strong>Deliverable:</strong> {proc.mod09.deliverables}</div>}
+                {proc.mod09.tools && <div style={{ marginTop: 4 }}><strong>Strumenti forniti:</strong> {proc.mod09.tools}</div>}
+              </div>
             </div>
           )}
 
@@ -701,21 +1085,184 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           {proc.modType === 'mod10' && proc.mod10 && (
             <div className="summary-section card-cmcc mb-3">
               <SectionHeader icon="bi-file-earmark-text" title="Dati Contratto MOD10" />
-              <SummaryRow label="Tipo Contratto"       value={proc.mod10.contractTypeMod10} />
-              <SummaryRow label="Livello CCNL"         value={proc.mod10.ccnlLevel} />
-              <SummaryRow label="Mansione"             value={proc.mod10.mansione} />
-              <SummaryRow label="Qualifica"            value={proc.mod10.qualifica} />
-              <SummaryRow label="Lordo FT (€/anno)"
-                value={proc.mod10.grossSalaryFT.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+              <SummaryGrid items={[
+                { label: 'Tipo Contratto',     value: proc.mod10.contractTypeMod10 },
+                { label: 'Livello CCNL',       value: proc.mod10.ccnlLevel },
+                { label: 'Mansione',           value: proc.mod10.mansione },
+                { label: 'Qualifica',          value: proc.mod10.qualifica },
+                { label: 'Lordo FT (€/anno)',  value: proc.mod10.grossSalaryFT.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' }) },
+                { label: 'Part-time',          value: (proc.mod10.partTimePercent > 0 && proc.mod10.partTimePercent < 100) ? `Sì — ${proc.mod10.partTimePercent}%` : 'No' },
+                { label: 'Data Inizio',        value: fmt(proc.mod10.startDate) },
+                { label: 'Data Fine',          value: fmt(proc.mod10.endDate) },
+                { label: 'Luogo di lavoro',    value: proc.mod10.workLocation },
+                { label: 'Expat',              value: proc.mod10.isExpat ? `Sì — ${proc.mod10.expatCountry}` : 'No' },
+              ]} />
+              {proc.mod10.activityDescription && (
+                <div style={{ padding: '4px 16px 14px', fontSize: 12, color: '#64748b' }}>
+                  <strong>Descrizione Attività:</strong> {proc.mod10.activityDescription}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sotto-task Babbo (solo subordinati, durante Redazione/Anteprima) */}
+          {proc.contractCategory === 'subordinato' &&
+           (normalizeStatus(proc.status) === 'redazione' || normalizeStatus(proc.status) === 'anteprima') && (
+            <div
+              className="card-cmcc mb-3"
+              style={{
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                borderLeft: '4px solid #295fa9',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!!proc.babboSent}
+                onChange={() => onUpdate({ babboSent: !proc.babboSent, updatedAt: new Date().toISOString() })}
+                style={{ width: 18, height: 18, accentColor: '#295fa9', cursor: 'pointer' }}
               />
-              <SummaryRow label="Part-time"
-                value={(proc.mod10.partTimePercent > 0 && proc.mod10.partTimePercent < 100)
-                  ? `Sì — ${proc.mod10.partTimePercent}%` : 'No'} />
-              <SummaryRow label="Data Inizio"          value={fmt(proc.mod10.startDate)} />
-              <SummaryRow label="Data Fine"            value={fmt(proc.mod10.endDate)} />
-              <SummaryRow label="Descrizione Attività" value={proc.mod10.activityDescription} />
-              <SummaryRow label="Luogo di lavoro"      value={proc.mod10.workLocation} />
-              <SummaryRow label="Expat"                value={proc.mod10.isExpat ? `Sì — ${proc.mod10.expatCountry}` : 'No'} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>
+                  Invia info allo studio esterno (Babbo)
+                  <span className="tag tag-purple ms-2" style={{ fontSize: 10 }}>solo subordinati</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>
+                  Sub-task contestuale alla redazione del contratto subordinato. Spunta quando hai inviato i dati allo studio esterno.
+                </div>
+              </div>
+              {proc.babboSent && <span className="tag tag-green">Inviato</span>}
+            </div>
+          )}
+
+          {/* Alert "modifiche segnalate dalla risorsa" */}
+          {proc.previewStatus === 'changes' && (
+            <div className="alert-cmcc warning mb-3">
+              <i className="bi bi-exclamation-triangle-fill me-2" />
+              <strong>Modifiche segnalate dalla risorsa</strong>
+              {proc.previewNotes && <div style={{ fontSize: 12, marginTop: 4 }}>"{proc.previewNotes}"</div>}
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                Il processo è tornato in Redazione per applicare le modifiche prima di reinviare l'anteprima.
+              </div>
+            </div>
+          )}
+
+          {/* Riconciliazione Zucchetti (solo nuovi assunti in fase anagrafica) */}
+          {proc.isNewResource && !proc.zucchettiReconciled && normalizeStatus(proc.status) === 'anagrafica' && (() => {
+            const candidateName = (proc.newResourceName || '').toLowerCase();
+            const baseList = candidateName
+              ? RESOURCES.filter(r =>
+                  r.fullName.toLowerCase().includes(candidateName.split(' ')[0]) ||
+                  candidateName.includes(r.lastName.toLowerCase())
+                )
+              : RESOURCES;
+            const filtered = zucchettiQuery.trim()
+              ? RESOURCES.filter(r => {
+                  const q = zucchettiQuery.toLowerCase();
+                  return r.fullName.toLowerCase().includes(q)
+                      || r.email.toLowerCase().includes(q)
+                      || r.cf.toLowerCase().includes(q)
+                      || (r.idEmploy || '').toLowerCase().includes(q);
+                })
+              : baseList.slice(0, 8);
+            const reconcileWith = (r: typeof RESOURCES[number]) => {
+              const now = new Date().toISOString();
+              onUpdate({
+                resourceId: r.idSubject,
+                resource: r,
+                isNewResource: false,
+                zucchettiReconciled: true,
+                updatedAt: now,
+                history: [...proc.history, {
+                  id: `H${proc.history.length + 1}`,
+                  timestamp: now,
+                  action: `Riconciliato con DossierRisorse: ${r.fullName} (matr. ${r.idEmploy})`,
+                  actor: proc.requestedBy,
+                  actorRole: roleLabel(currentRole),
+                  toStatus: proc.status,
+                }],
+              });
+            };
+            return (
+              <div
+                className="card-cmcc mb-3"
+                style={{ padding: 14, borderLeft: '4px solid #f1a20e', background: '#fffbeb' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <i className="bi bi-link-45deg" style={{ fontSize: 22, color: '#f1a20e' }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>
+                      Riconciliazione con Zucchetti
+                      <span className="tag tag-amber ms-2" style={{ fontSize: 10 }}>Richiesto</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b' }}>
+                      Il nuovo assunto <strong>{proc.newResourceName ?? '—'}</strong> non è ancora collegato al
+                      master <strong>DossierRisorse</strong>. Cerca e seleziona la voce corrispondente
+                      per popolare l'anagrafica e proseguire con il processo.
+                    </div>
+                  </div>
+                </div>
+                <div className="search-wrapper mb-2">
+                  <i className="bi bi-search" />
+                  <input
+                    type="text"
+                    className="form-control search-input"
+                    placeholder="Cerca in DossierRisorse: nome, email, CF, matricola…"
+                    value={zucchettiQuery}
+                    onChange={e => setZucchettiQuery(e.target.value)}
+                  />
+                </div>
+                <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {filtered.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#64748b', padding: 12, textAlign: 'center' }}>
+                      Nessuna corrispondenza trovata.
+                    </div>
+                  ) : (
+                    filtered.map(r => (
+                      <div
+                        key={r.idSubject}
+                        className="resource-card"
+                        style={{ cursor: 'pointer', padding: '10px 12px' }}
+                        onClick={() => reconcileWith(r)}
+                      >
+                        <div
+                          className="resource-avatar"
+                          style={{ background: avatarColor(r.fullName), flexShrink: 0, width: 34, height: 34, fontSize: 12 }}
+                        >
+                          {initials(r.fullName)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>
+                            {r.fullName}
+                            <span style={{ fontSize: 10, color: '#64748b', marginLeft: 8, fontFamily: 'monospace' }}>
+                              matr. {r.idEmploy}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#64748b' }}>
+                            {r.email} · {r.unitCode} · {r.contractType}
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-cmcc-primary"
+                          style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
+                          onClick={(e) => { e.stopPropagation(); reconcileWith(r); }}
+                        >
+                          <i className="bi bi-link me-1" />
+                          Collega
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+          {proc.isNewResource && proc.zucchettiReconciled && proc.resource && normalizeStatus(proc.status) === 'anagrafica' && (
+            <div className="alert-cmcc success mb-3" style={{ fontSize: 12 }}>
+              <i className="bi bi-check-circle-fill me-2" />
+              Anagrafica <strong>riconciliata</strong> con DossierRisorse (matr. {proc.resource.idEmploy}). Puoi avanzare allo step successivo.
             </div>
           )}
 
@@ -1088,83 +1635,133 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
         </div>
       )}
 
-      {/* ── Stepper click modal ──────────────────────────────────────── */}
+      {/* ── Stepper popover (floating, ancorato allo step cliccato) ─────── */}
       {stepModal && (() => {
         const data = getStepClickData(stepModal);
         if (!data) return null;
+
+        // Posizionamento esatto: il popover viene ancorato al bordo dello
+        // step usando `bottom`/`top` CSS, così non serve stimarne l'altezza.
+        const POP_W = 320;
+        const MARGIN = 12;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        let left = vw / 2 - POP_W / 2;
+        let arrowSide: 'bottom' | 'top' = 'bottom';
+        let arrowLeft = '50%';
+        let cssBottom: number | undefined;
+        let cssTop:    number | undefined;
+
+        if (popoverAnchor) {
+          const cx = popoverAnchor.left + popoverAnchor.width / 2;
+          left = Math.min(Math.max(8, cx - POP_W / 2), vw - POP_W - 8);
+          arrowLeft = `${cx - left}px`;
+          const spaceAbove = popoverAnchor.top;
+          const spaceBelow = vh - popoverAnchor.bottom;
+          if (spaceAbove >= 200 || spaceAbove >= spaceBelow) {
+            // sopra lo step: ancorato al BOTTOM del popover
+            cssBottom = vh - popoverAnchor.top + MARGIN;
+            arrowSide = 'bottom';
+          } else {
+            // sotto lo step: ancorato al TOP del popover
+            cssTop = popoverAnchor.bottom + MARGIN;
+            arrowSide = 'top';
+          }
+        } else {
+          cssTop = vh / 2 - 100;
+        }
+
         return (
-          <div
-            style={{
-              position: 'fixed', inset: 0, zIndex: 9999,
-              background: 'rgba(15,23,42,0.45)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-            onClick={e => { if (e.target === e.currentTarget) { setStepModal(null); setStepModalNotes(''); } }}
-          >
+          <>
             <div
-              className="card-cmcc"
-              style={{ width: 420, maxWidth: '92vw', padding: 28, position: 'relative' }}
+              style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'transparent' }}
+              onClick={() => { setStepModal(null); setStepModalNotes(''); setPopoverAnchor(null); }}
+            />
+            <div
+              role="dialog"
+              style={{
+                position: 'fixed',
+                ...(cssBottom !== undefined ? { bottom: cssBottom } : {}),
+                ...(cssTop    !== undefined ? { top:    cssTop    } : {}),
+                left, width: POP_W,
+                zIndex: 9999,
+                background: '#fff',
+                borderRadius: 10,
+                boxShadow: '0 10px 30px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.08)',
+                border: '1px solid #e2e8f0',
+                padding: 14,
+              }}
             >
-              <button
-                className="btn btn-cmcc-ghost"
-                style={{ position: 'absolute', top: 12, right: 12, padding: '4px 8px', fontSize: 14 }}
-                onClick={() => { setStepModal(null); setStepModalNotes(''); }}
-              >
-                <i className="bi bi-x-lg" />
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  left: arrowLeft,
+                  transform: 'translateX(-50%) rotate(45deg)',
+                  width: 12, height: 12,
+                  background: '#fff',
+                  border: '1px solid #e2e8f0',
+                  ...(arrowSide === 'bottom'
+                    ? { bottom: -7, borderTop: 'none', borderLeft: 'none' }
+                    : { top: -7,    borderBottom: 'none', borderRight: 'none' }),
+                }}
+              />
+
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
                 <div
                   style={{
-                    width: 36, height: 36, borderRadius: '50%',
+                    width: 30, height: 30, borderRadius: '50%',
                     background: '#295fa9', color: 'white',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16,
+                    fontSize: 13, flexShrink: 0,
                   }}
                 >
                   <i className="bi bi-lightning-fill" />
                 </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>{data.title}</div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>{data.desc}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', lineHeight: 1.2 }}>{data.title}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, lineHeight: 1.35 }}>{data.desc}</div>
                 </div>
+                <button
+                  className="btn btn-cmcc-ghost"
+                  style={{ padding: '2px 6px', fontSize: 11, flexShrink: 0 }}
+                  onClick={() => { setStepModal(null); setStepModalNotes(''); setPopoverAnchor(null); }}
+                  aria-label="Chiudi"
+                >
+                  <i className="bi bi-x-lg" />
+                </button>
               </div>
+
               <textarea
-                className="form-control mb-3"
-                rows={3}
-                placeholder="Note opzionali (motivazione, osservazioni…)"
-                style={{ fontSize: 13, resize: 'none' }}
+                className="form-control mb-2"
+                rows={2}
+                placeholder="Nota (opzionale)…"
+                style={{ fontSize: 12, resize: 'none' }}
                 value={stepModalNotes}
                 onChange={e => setStepModalNotes(e.target.value)}
               />
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button
-                  className="btn btn-cmcc-ghost"
-                  style={{ fontSize: 13 }}
-                  onClick={() => { setStepModal(null); setStepModalNotes(''); }}
-                >
-                  Annulla
-                </button>
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                 {data.canReject && data.onReject && (
                   <button
                     className="btn btn-cmcc-danger"
-                    style={{ fontSize: 13 }}
+                    style={{ fontSize: 12, padding: '5px 12px' }}
                     onClick={data.onReject}
                   >
-                    <i className="bi bi-x-lg me-2" />
-                    Respingi
+                    <i className="bi bi-x-lg me-1" />
+                    Rifiuta
                   </button>
                 )}
                 <button
                   className="btn btn-cmcc-success"
-                  style={{ fontSize: 13 }}
+                  style={{ fontSize: 12, padding: '5px 12px' }}
                   onClick={data.onApprove}
                 >
-                  <i className="bi bi-check-lg me-2" />
+                  <i className="bi bi-check-lg me-1" />
                   {data.canReject ? 'Approva' : 'Conferma'}
                 </button>
               </div>
             </div>
-          </div>
+          </>
         );
       })()}
     </div>

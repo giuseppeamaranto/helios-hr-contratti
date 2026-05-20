@@ -209,8 +209,72 @@ export const SEDI = [
   'Misto (presenza + remoto)',
 ];
 
-// ── Unità organizzative (da colonna AU del MOD09 / AG del MOD10) ──────────
+// ── Unità Organizzative (da colonna AU del MOD09 / AG del MOD10) ──────────
+//
+// `ORG_UNITS` è la lista strutturata (code, name, parent Istituto) usata dalle
+// dropdown "Unità Organizzative" in Step1Avvio e dai moduli MOD09/MOD10.
+// Il parent serve a filtrare i progetti (vincolati al codice Istituto).
 
+export interface OrgUnit {
+  code: string;          // es. 'ESYDA', 'CLIVAP', 'GOCO', 'ROFS', 'ICR'
+  name: string;          // es. 'Earth System Model Data and Analytics'
+  parentInstitute: string; // 'ICR' | 'IESP' | 'EIEE' | 'ASC' | 'CENTRALE' | 'IND'
+  group: 'Istituti' | 'Divisioni Scientifiche' | 'Centri Tecnici' | 'Divisioni di Supporto';
+}
+
+export const ORG_UNITS: OrgUnit[] = [
+  // Istituti — sono "ombrello"; il parent coincide con se stessi
+  { code: 'ICR',  name: 'Istituto per la Resilienza Climatica',                  parentInstitute: 'ICR',  group: 'Istituti' },
+  { code: 'IESP', name: 'Istituto Euro-Mediterraneo per le Previsioni e Scenari',parentInstitute: 'IESP', group: 'Istituti' },
+  { code: 'EIEE', name: 'Istituto Economia e Impatti dell\'Energia',             parentInstitute: 'EIEE', group: 'Istituti' },
+  { code: 'ASC',  name: 'Adaptation and Mitigation Science Center',              parentInstitute: 'ASC',  group: 'Istituti' },
+
+  // Divisioni Scientifiche — mappate al parent Istituto via numerazione cost-center
+  { code: 'IAFES', name: 'Impacts on Agriculture, Forests and Ecosystem Services', parentInstitute: 'ICR',  group: 'Divisioni Scientifiche' },
+  { code: 'RAAS',  name: 'Regional Analysis and Atmospheric Science',              parentInstitute: 'ICR',  group: 'Divisioni Scientifiche' },
+  { code: 'REMHI', name: 'Regional Models and geo-Hydrological Impacts',           parentInstitute: 'ICR',  group: 'Divisioni Scientifiche' },
+  { code: 'SOWAS', name: 'Sustainable Use of Water Resources in the Alpine Region',parentInstitute: 'ICR',  group: 'Divisioni Scientifiche' },
+  { code: 'SEME',  name: 'Sustainable Marine Ecosystems',                          parentInstitute: 'EIEE', group: 'Divisioni Scientifiche' },
+  { code: 'ECIP',  name: 'Economic Analysis of Climate Impacts and Policy',        parentInstitute: 'EIEE', group: 'Divisioni Scientifiche' },
+  { code: 'TCT',   name: 'Transdisciplinary Themes in Climate Change',             parentInstitute: 'EIEE', group: 'Divisioni Scientifiche' },
+  { code: 'GOCO',  name: 'Global Carbon Cycle',                                    parentInstitute: 'IESP', group: 'Divisioni Scientifiche' },
+  { code: 'ESYDA', name: 'Earth System Model Data and Analytics',                  parentInstitute: 'IESP', group: 'Divisioni Scientifiche' },
+  { code: 'CLIVAP',name: 'Climate Variability and Prediction',                     parentInstitute: 'IESP', group: 'Divisioni Scientifiche' },
+  { code: 'ROFS',  name: 'Regional Ocean and Forecast System',                     parentInstitute: 'IESP', group: 'Divisioni Scientifiche' },
+  { code: 'OPA',   name: 'Ocean Physics and Assimilation',                         parentInstitute: 'IESP', group: 'Divisioni Scientifiche' },
+  { code: 'MEOM',  name: 'Marine Ecosystems and Observations Methods',             parentInstitute: 'IESP', group: 'Divisioni Scientifiche' },
+
+  // Centri Tecnici — ASC fa da parent storico
+  { code: 'HPCC',  name: 'High Performance Computing Center',                      parentInstitute: 'ASC',  group: 'Centri Tecnici' },
+  { code: 'ADIC',  name: 'Advanced Digital Innovation Center',                     parentInstitute: 'ASC',  group: 'Centri Tecnici' },
+  { code: 'ATEC',  name: 'Advanced Training and Education Center',                 parentInstitute: 'ASC',  group: 'Centri Tecnici' },
+
+  // Divisioni di Supporto — strutture centrali (parent CENTRALE)
+  { code: 'EXEC',   name: 'Executive Office',                              parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'GC',     name: 'General Counsel',                               parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'LEGAL',  name: 'Legal & Contract Advisory',                     parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'PEOPLE', name: 'People & Culture',                              parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'AF',     name: 'Administration & Finance',                      parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'PROC',   name: 'Public Procurement',                            parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'PAMC',   name: 'Project Administration & Management Control',   parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'IT',     name: 'Information Technology',                        parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'FMHSE',  name: 'Facility Management & HSE',                     parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'COMM',   name: 'Communication & Science Outreach',              parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+  { code: 'FUND',   name: 'Fund-Raising',                                  parentInstitute: 'CENTRALE', group: 'Divisioni di Supporto' },
+];
+
+/** Returns the parent Institute code for an org-unit code, or '' if not found. */
+export function instituteForOrgUnit(code: string): string {
+  return ORG_UNITS.find(u => u.code === code)?.parentInstitute ?? '';
+}
+
+/** Returns the full "CODE — Name" display string for an org-unit code. */
+export function orgUnitLabel(code: string): string {
+  const u = ORG_UNITS.find(x => x.code === code);
+  return u ? `${u.code} — ${u.name}` : code;
+}
+
+// Legacy export — string list mantenuta per compatibilità con MOD09/MOD10
 export const ORG_UNITS_LIST = [
   // ── Istituti ──────────────────────────────────────────
   'ICR — Istituto per la Resilienza Climatica',
@@ -740,7 +804,7 @@ export const MOCK_PROCESSES: ContractProcess[] = [
     id: 'PROC-2025-004',
     createdAt: '2025-05-12T08:30:00Z',
     updatedAt: '2025-05-18T10:00:00Z',
-    status: 'contratto-firma',
+    status: 'firma-presidente',
     operationType: 'nuova-assunzione',
     requestedBy: 'Prof. Giulia Romano',
     requestedByEmail: 'giulia.romano@cmcc.it',
@@ -969,26 +1033,47 @@ export const MOCK_PROCESSES: ContractProcess[] = [
 ];
 
 export const CURRENT_USER = {
-  name: 'Maria Grazia Esposito',
-  email: 'mariagrazia.esposito@cmcc.it',
+  name: 'ADMIN USER',
+  email: 'admin.user@cmcc.it',
   role: 'gru' as const,
   unit: 'GRU - Gestione Risorse Umane',
 };
 
+// STATUS_CONFIG — allineato al FlowChart CMCC (13 step + 2 terminali)
+// step numbering segue STEPS in ProcessDetail.tsx
 export const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string; step: number }> = {
-  'bozza':                { label: 'Bozza',                color: '#64748b', bg: '#f1f5f9', icon: 'bi-file-earmark',        step: 0 },
-  'approvazione-rs':      { label: 'Approv. RS',           color: '#d97706', bg: '#fef3c7', icon: 'bi-person-check',        step: 1 },
-  'approvazione-dir':     { label: 'Approv. Direttore',    color: '#7c3aed', bg: '#ede9fe', icon: 'bi-person-badge',        step: 2 },
-  'verifica-gru':         { label: 'Verifica GRU',         color: '#1d4ed8', bg: '#dbeafe', icon: 'bi-clipboard-check',    step: 3 },
-  'elaborazione-gru':     { label: 'Elaborazione GRU',     color: '#0891b2', bg: '#cffafe', icon: 'bi-gear',               step: 3 },
-  'lettera-presentazione':{ label: 'Lettera Present.',     color: '#059669', bg: '#d1fae5', icon: 'bi-envelope-paper',     step: 4 },
-  'contratto-preparazione':{ label: 'Prepaz. Contratto',  color: '#dc2626', bg: '#fee2e2', icon: 'bi-file-earmark-text',  step: 5 },
-  'contratto-firma':      { label: 'Contratto in Firma',   color: '#b45309', bg: '#fef9c3', icon: 'bi-pen',               step: 6 },
-  'anagrafica':           { label: 'Anagrafica',           color: '#0f766e', bg: '#ccfbf1', icon: 'bi-person-vcard',       step: 7 },
-  'zucchetti':            { label: 'Caric. Zucchetti',     color: '#4338ca', bg: '#e0e7ff', icon: 'bi-upload',            step: 8 },
-  'completato':           { label: 'Completato',           color: '#16a34a', bg: '#dcfce7', icon: 'bi-check-circle-fill', step: 9 },
-  'annullato':            { label: 'Annullato',            color: '#dc2626', bg: '#fee2e2', icon: 'bi-x-circle-fill',    step: -1 },
-  'respinto':             { label: 'Respinto',             color: '#dc2626', bg: '#fee2e2', icon: 'bi-x-octagon-fill',   step: -1 },
+  'bozza':                  { label: 'Bozza',              color: '#64748b', bg: '#f1f5f9', icon: 'bi-file-earmark',        step: 0 },
+  'approvazione-rs':        { label: 'Approv. Resp.',      color: '#d97706', bg: '#fef3c7', icon: 'bi-person-check',        step: 1 },
+  'verifica-gru':           { label: 'Verifica HR Admin',  color: '#1d4ed8', bg: '#dbeafe', icon: 'bi-clipboard-check',     step: 2 },
+  'approvazione-dir':       { label: 'Approv. Dir. Esec.', color: '#7c3aed', bg: '#ede9fe', icon: 'bi-person-badge',        step: 3 },
+  'approvazione-organo':    { label: 'Approv. Organo',     color: '#a21caf', bg: '#fae8ff', icon: 'bi-bank',                step: 4 },
+  'redazione':              { label: 'Redazione',          color: '#0891b2', bg: '#cffafe', icon: 'bi-pencil-square',       step: 5 },
+  'anteprima':              { label: 'Anteprima Risorsa',  color: '#059669', bg: '#d1fae5', icon: 'bi-eye',                 step: 6 },
+  'firma-presidente':       { label: 'Firma Presidente',   color: '#b45309', bg: '#fef9c3', icon: 'bi-pen',                 step: 7 },
+  'protocollo':             { label: 'Protocollo',         color: '#9333ea', bg: '#f3e8ff', icon: 'bi-file-earmark-medical',step: 8 },
+  'applicativi':            { label: 'Applicativi',        color: '#4338ca', bg: '#e0e7ff', icon: 'bi-upload',              step: 9 },
+  'anagrafica':             { label: 'Anagrafica',         color: '#0f766e', bg: '#ccfbf1', icon: 'bi-person-vcard',        step: 10 },
+  'monitoraggio':           { label: 'Monitoraggio',       color: '#0284c7', bg: '#e0f2fe', icon: 'bi-radar',               step: 11 },
+  'completato':             { label: 'Completato',         color: '#16a34a', bg: '#dcfce7', icon: 'bi-check-circle-fill',   step: 12 },
+  // legacy aliases — mappati al loro corrispondente nuovo step
+  'elaborazione-gru':       { label: 'Elaborazione GRU',   color: '#0891b2', bg: '#cffafe', icon: 'bi-gear',                step: 5 },
+  'lettera-presentazione':  { label: 'Lettera Present.',   color: '#059669', bg: '#d1fae5', icon: 'bi-envelope-paper',      step: 6 },
+  'contratto-preparazione': { label: 'Prep. Contratto',    color: '#dc2626', bg: '#fee2e2', icon: 'bi-file-earmark-text',   step: 5 },
+  'contratto-firma':        { label: 'Contratto in Firma', color: '#b45309', bg: '#fef9c3', icon: 'bi-pen',                 step: 7 },
+  'zucchetti':              { label: 'Caric. Zucchetti',   color: '#4338ca', bg: '#e0e7ff', icon: 'bi-upload',              step: 9 },
+  'annullato':              { label: 'Annullato',          color: '#dc2626', bg: '#fee2e2', icon: 'bi-x-circle-fill',       step: -1 },
+  'respinto':               { label: 'Respinto',           color: '#dc2626', bg: '#fee2e2', icon: 'bi-x-octagon-fill',      step: -1 },
+};
+
+/** Label leggibile per i ruoli — usata da Header switcher e Approvazioni tab. */
+export const ROLE_LABELS: Record<string, string> = {
+  rs:          'Responsabile Struttura',
+  gru:         'HR Admin (GRU)',
+  direttore:   'Direttore Esecutivo',
+  amm:         'Amministrazione',
+  presidente:  'Presidente',
+  governance:  'Governance (CE/CdA)',
+  segreteria:  'Segreteria',
 };
 
 export const OPERATION_LABELS: Record<string, string> = {

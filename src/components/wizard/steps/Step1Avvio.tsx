@@ -1,4 +1,5 @@
-import { UNITS, PROJECTS, CURRENT_USER, OPERATION_LABELS } from '../../../data/mockData';
+import { ORG_UNITS, PROJECTS, CURRENT_USER, OPERATION_LABELS, instituteForOrgUnit } from '../../../data/mockData';
+import { allowedOperationsFor, detectResourceCategory, explainRule } from '../../../data/resourceRules';
 import type { OperationType } from '../../../types';
 import type { WizardState } from '../ContractWizard';
 
@@ -7,21 +8,48 @@ interface Props {
   onChange: (updates: Partial<WizardState>) => void;
 }
 
-const OPERATION_OPTIONS: { value: OperationType; icon: string; desc: string }[] = [
+const ALL_OPERATIONS: { value: OperationType; icon: string; desc: string }[] = [
   { value: 'nuova-assunzione', icon: '🆕', desc: 'Prima attivazione di un rapporto di lavoro con la risorsa' },
   { value: 'proroga',          icon: '🔄', desc: 'Estensione della durata di un contratto già in essere' },
   { value: 'trasformazione',   icon: '🔀', desc: 'Modifica della tipologia contrattuale della risorsa' },
   { value: 'integrazione',     icon: '➕', desc: 'Variazione del monte ore o condizioni integrative' },
 ];
 
-export function Step1Avvio({ state, onChange }: Props) {
-  const filteredProjects = PROJECTS.filter(p => p.unitCode === state.unitCode);
+// Pre-raggruppamento UO per optgroup — calcolato una volta sola a livello modulo.
+const UNITS_BY_GROUP = ORG_UNITS.reduce<Record<string, typeof ORG_UNITS>>((acc, u) => {
+  (acc[u.group] ||= []).push(u);
+  return acc;
+}, {});
 
-  const handleUnitChange = (unitCode: string) => {
-    const unit = UNITS.find(u => u.code === unitCode);
+export function Step1Avvio({ state, onChange }: Props) {
+  // Quando il wizard è partito da una risorsa già anagrafata, "nuova assunzione"
+  // non ha senso → la nascondiamo dalla griglia operazioni. (punto 10)
+  // Inoltre filtriamo le operazioni in base al contratto attuale della risorsa
+  // (CoCoCo / TD / TI), secondo le regole CMCC in data/resourceRules.ts.
+  const startedFromExistingResource = !!state.resource && !state.fromRecruiting;
+  const resourceCategory = detectResourceCategory(state.resource);
+  const allowedOps = allowedOperationsFor(resourceCategory);
+  const OPERATION_OPTIONS = startedFromExistingResource
+    ? ALL_OPERATIONS.filter(o => o.value !== 'nuova-assunzione' && allowedOps.includes(o.value))
+    : ALL_OPERATIONS;
+
+  // PROJECTS è ancorato al codice Istituto (ICR/IESP/EIEE/IAFES/REMHI/ASC).
+  // La UO scelta nella dropdown è più granulare (es. ESYDA, ROFS): risolviamo
+  // il parent Istituto per il filtro sui progetti. Se la UO ricade su 'CENTRALE'
+  // (Executive Office, IT, AF…) non ci sono progetti dedicati → mostriamo TUTTI
+  // i progetti (con hint visivo nella label) per non lasciare l'utente bloccato.
+  const parentInstitute = instituteForOrgUnit(state.unitCode);
+  const matchedProjects = parentInstitute
+    ? PROJECTS.filter(p => p.unitCode === parentInstitute)
+    : PROJECTS.filter(p => p.unitCode === state.unitCode);
+  const showAllProjects = state.unitCode !== '' && matchedProjects.length === 0;
+  const filteredProjects = showAllProjects ? PROJECTS : matchedProjects;
+
+  const handleUnitChange = (code: string) => {
+    const u = ORG_UNITS.find(x => x.code === code);
     onChange({
-      unitCode,
-      unitName: unit ? `${unit.code} - ${unit.name}` : '',
+      unitCode: code,
+      unitName: u ? `${u.code} — ${u.name}` : '',
       projectCode: '',
       projectName: '',
       costCenter: '',
@@ -39,6 +67,14 @@ export function Step1Avvio({ state, onChange }: Props) {
 
   return (
     <div>
+      {/* Avviso regola contratto attuale (solo se partito da risorsa esistente) */}
+      {startedFromExistingResource && (
+        <div className="alert-cmcc info mb-3" style={{ fontSize: 12 }}>
+          <i className="bi bi-shield-check me-2" />
+          <strong>Regola contratto attuale:</strong> {explainRule(resourceCategory)}
+        </div>
+      )}
+
       {/* Tipo Operazione */}
       <div className="mb-4">
         <label className="form-label">
@@ -57,6 +93,12 @@ export function Step1Avvio({ state, onChange }: Props) {
             </div>
           ))}
         </div>
+        {startedFromExistingResource && OPERATION_OPTIONS.length === 0 && (
+          <div className="alert-cmcc warning mt-2" style={{ fontSize: 12 }}>
+            <i className="bi bi-x-octagon-fill me-2" />
+            Nessuna operazione contrattuale disponibile per il tipo di contratto attuale della risorsa.
+          </div>
+        )}
       </div>
 
       <div className="row g-3">
@@ -87,21 +129,25 @@ export function Step1Avvio({ state, onChange }: Props) {
           />
         </div>
 
-        {/* Unità di Struttura */}
+        {/* Unità Organizzative (ex "Unità di Struttura") — punto 8 */}
         <div className="col-md-6">
           <label className="form-label">
-            Unità di Struttura <span className="required">*</span>
+            Unità Organizzative <span className="required">*</span>
           </label>
           <select
             className="form-select"
             value={state.unitCode}
             onChange={e => handleUnitChange(e.target.value)}
           >
-            <option value="">— Seleziona unità —</option>
-            {UNITS.map(u => (
-              <option key={u.code} value={u.code}>
-                {u.code} — {u.name}
-              </option>
+            <option value="">— Seleziona unità organizzativa —</option>
+            {Object.entries(UNITS_BY_GROUP).map(([group, list]) => (
+              <optgroup key={group} label={group}>
+                {list.map(u => (
+                  <option key={u.code} value={u.code}>
+                    {u.code} — {u.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -126,7 +172,13 @@ export function Step1Avvio({ state, onChange }: Props) {
           </select>
           {!state.unitCode && (
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-              Seleziona prima l'unità di struttura
+              Seleziona prima l'unità organizzativa
+            </div>
+          )}
+          {showAllProjects && (
+            <div style={{ fontSize: 11, color: '#f1a20e', marginTop: 4 }}>
+              <i className="bi bi-info-circle me-1" />
+              Nessun progetto dedicato per <strong>{state.unitCode}</strong>: mostro tutti i progetti disponibili.
             </div>
           )}
         </div>

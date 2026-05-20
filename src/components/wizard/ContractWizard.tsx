@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CURRENT_USER, RECRUITING_CANDIDATES } from '../../data/mockData';
+import { CURRENT_USER, RECRUITING_CANDIDATES, MOD10_CONTRACT_TYPES } from '../../data/mockData';
+import { decideContractAction } from '../../data/resourceRules';
 import type {
   ContractCategory,
   ContractType,
@@ -8,6 +9,7 @@ import type {
   Mod10Data,
   OperationType,
   ProcessDocument,
+  RecruitingCandidate,
   Resource,
   UserRole,
 } from '../../types';
@@ -53,11 +55,19 @@ export interface WizardState {
 }
 
 /* ── Props ──────────────────────────────────────────────────────────────── */
+export interface WizardSeed {
+  // Filone "Risorsa esistente" — partito da PeopleDirectory
+  resource?: Resource;
+  // Filone "Recruiting" — partito dal pannello ATS (candidato preselezionato)
+  recruitingCandidate?: RecruitingCandidate;
+}
+
 interface Props {
   currentRole: UserRole;
   onSave: (process: ContractProcess) => void;
   onCancel: () => void;
   existingProcesses: ContractProcess[];
+  seed?: WizardSeed;
 }
 
 /* ── Step config ─────────────────────────────────────────────────────────── */
@@ -71,15 +81,15 @@ const STEPS = [
 ];
 
 /* ── Validation per step ─────────────────────────────────────────────────── */
-function validateStep(step: number, state: WizardState): string[] {
+function validateStep(step: number, state: WizardState, seeded: boolean): string[] {
   const errors: string[] = [];
   if (step === 1) {
     if (!state.operationType) errors.push('Seleziona il tipo di operazione');
     if (!state.requestedBy.trim()) errors.push('Inserisci il richiedente');
-    if (!state.unitCode) errors.push('Seleziona l\'unità di struttura');
+    if (!state.unitCode) errors.push('Seleziona l\'unità organizzativa');
     if (!state.projectCode) errors.push('Seleziona il progetto');
   }
-  if (step === 2) {
+  if (step === 2 && !seeded) {
     if (!state.isNewResource && !state.resourceId) {
       errors.push('Seleziona una risorsa esistente o scegli "Nuova Risorsa"');
     }
@@ -107,7 +117,12 @@ function validateStep(step: number, state: WizardState): string[] {
       if (!state.mod10.qualifica) errors.push('Seleziona la qualifica');
       if (!state.mod10.grossSalaryFT || state.mod10.grossSalaryFT <= 0) errors.push('Inserisci il lordo FT annuale');
       if (!state.mod10.startDate) errors.push('Inserisci la data di inizio');
-      if (!state.mod10.endDate) errors.push('Inserisci la data di fine');
+      // Tempo Indeterminato: il campo "data fine" non è applicabile (contratto
+      // senza scadenza) → niente obbligatorietà. Per TD e Distacco resta.
+      const mod10Type = MOD10_CONTRACT_TYPES.find(t => t.code === state.mod10.contractTypeMod10);
+      const isIndeterminate =
+        state.contractType === 'subordinato-ti' || mod10Type?.isIndeterminate === true;
+      if (!isIndeterminate && !state.mod10.endDate) errors.push('Inserisci la data di fine');
       if (!state.mod10.activityDescription?.trim()) errors.push('Inserisci la descrizione dell\'attività');
     }
   }
@@ -162,11 +177,17 @@ function buildProcess(
     jobCallTitle: state.jobCallTitle,
     mod09: state.modType === 'mod09' ? (state.mod09 as Mod09Data) : undefined,
     mod10: state.modType === 'mod10' ? (state.mod10 as Mod10Data) : undefined,
+    // ── Approvals lungo la pipeline FlowChart ──────────────────────────────
+    // Direttore + Governance vengono saltati se importo < 1000 €, ma le
+    // tracce restano per chiarezza (con status="approved" via stepper jump).
     approvals: [
-      { id: 'A1', role: 'rs',       name: state.requestedBy, status: 'pending' },
-      { id: 'A2', role: 'direttore', name: '—',              status: 'pending' },
-      { id: 'A3', role: 'gru',      name: 'Team GRU',        status: 'pending' },
-      { id: 'A4', role: 'amm',      name: 'Ufficio AMM',     status: 'pending' },
+      { id: 'A1', role: 'rs',         name: state.requestedBy, status: 'pending' },
+      { id: 'A2', role: 'direttore',  name: '—',               status: 'pending' },
+      { id: 'A3', role: 'governance', name: 'CE / CdA',        status: 'pending' },
+      { id: 'A4', role: 'gru',        name: 'HR Admin',        status: 'pending' },
+      { id: 'A5', role: 'presidente', name: 'Presidente CMCC', status: 'pending' },
+      { id: 'A6', role: 'segreteria', name: 'Segreteria',      status: 'pending' },
+      { id: 'A7', role: 'amm',        name: 'Ufficio AMM',     status: 'pending' },
     ],
     documents: docs,
     history: [
@@ -189,40 +210,116 @@ function buildProcess(
       state.contractType === 'subordinato-td' || state.contractType === 'subordinato-ti',
     mod14Submitted: false,
     zucchettiLoaded: false,
+    // ── FlowChart gating ────────────────────────────────────────────────────
+    requestedAmount: state.modType === 'mod10'
+      ? (state.mod10.grossSalaryFT ?? 0)
+      : (state.mod09.grossCompensation ?? 0) * 12, // mensile → annuo
+    isDirezioneScientifica: state.modType === 'mod09', // euristica: il MOD09 (non-subordinato) passa solitamente in CE
+    previewStatus: undefined,
+    babboSent: false,
   };
+
+  // ── Regola CMCC: nuovo contratto vs modifica del contratto attuale ──────
+  const newStartDate = state.modType === 'mod10'
+    ? state.mod10.startDate
+    : state.mod09.startDate;
+  // Rinnovo esplicito: MOD10 isRinnovo=true oppure MOD09 isProroga=true
+  const isRenewal = state.modType === 'mod10'
+    ? !!state.mod10.isRinnovo
+    : !!state.mod09.isProroga;
+  const decision = decideContractAction({
+    resource: state.resource,
+    newContractType: state.contractType || undefined,
+    newStartDate,
+    isRenewal,
+  });
+  if (decision) {
+    process.contractAction        = decision.action;
+    process.contractActionReason  = decision.reason;
+    process.interruptionDays      = decision.interruptionDays;
+  } else if (state.isNewResource || state.fromRecruiting) {
+    // Nuova assunzione → sempre nuovo contratto
+    process.contractAction = 'new-contract';
+    process.contractActionReason = 'Nuova assunzione: nuovo contratto.';
+    process.interruptionDays = 0;
+  }
+
   return process;
 }
 
 /* ── ContractWizard Component ─────────────────────────────────────────────── */
-export function ContractWizard({ currentRole, onSave, onCancel, existingProcesses }: Props) {
-  const [state, setState] = useState<WizardState>({
-    step: 1,
-    operationType: '',
-    requestedBy: CURRENT_USER.name,
-    requestedByEmail: CURRENT_USER.email,
-    unitCode: '',
-    unitName: '',
-    projectCode: '',
-    projectName: '',
-    costCenter: '',
-    isUrgent: false,
-    notes: '',
-    contractCategory: '',
-    contractType: '',
-    modType: '',
-    resourceId: '',
-    resource: null,
-    isNewResource: false,
-    newResourceName: '',
-    newResourceEmail: '',
-    fromRecruiting: false,
-    recruitingCandidateId: undefined,
-    jobCallCode: undefined,
-    jobCallTitle: undefined,
-    mod09: {},
-    mod10: {},
-    documents: [],
-  });
+export function ContractWizard({ currentRole, onSave, onCancel, existingProcesses, seed }: Props) {
+  // ── Stato iniziale ─────────────────────────────────────────────────────
+  // Quando il wizard è partito da una risorsa esistente (PeopleDirectory)
+  // pre-popoliamo resource e prepariamo l'unità organizzativa dell'utente.
+  // Quando è partito dal recruiting, pre-popoliamo i campi nuova-risorsa.
+  const initial: WizardState = (() => {
+    const base: WizardState = {
+      step: 1,
+      operationType: '',
+      requestedBy: CURRENT_USER.name,
+      requestedByEmail: CURRENT_USER.email,
+      unitCode: '',
+      unitName: '',
+      projectCode: '',
+      projectName: '',
+      costCenter: '',
+      isUrgent: false,
+      notes: '',
+      contractCategory: '',
+      contractType: '',
+      modType: '',
+      resourceId: '',
+      resource: null,
+      isNewResource: false,
+      newResourceName: '',
+      newResourceEmail: '',
+      fromRecruiting: false,
+      recruitingCandidateId: undefined,
+      jobCallCode: undefined,
+      jobCallTitle: undefined,
+      mod09: {},
+      mod10: {},
+      documents: [],
+    };
+
+    if (seed?.resource) {
+      const r = seed.resource;
+      // Heuristica: il `unitCode` della risorsa è di solito un Istituto (ICR/IESP/EIEE…).
+      // Lo trasferiamo come default dell'UO. Se l'utente vuole una UO più granulare la cambia.
+      return {
+        ...base,
+        resourceId: r.idSubject,
+        resource: r,
+        isNewResource: false,
+        unitCode: r.unitCode,
+        unitName: r.unit,
+      };
+    }
+    if (seed?.recruitingCandidate) {
+      const c = seed.recruitingCandidate;
+      return {
+        ...base,
+        operationType: 'nuova-assunzione',
+        fromRecruiting: true,
+        recruitingCandidateId: c.id,
+        jobCallCode: c.jobCallCode,
+        jobCallTitle: c.jobCallTitle,
+        isNewResource: true,
+        newResourceName: c.fullName,
+        newResourceEmail: c.email,
+        unitCode: c.unitCode,
+        unitName: c.unitName,
+      };
+    }
+    return base;
+  })();
+
+  const [state, setState] = useState<WizardState>(initial);
+
+  // Un wizard è "seeded" se è partito con risorsa o candidato preselezionato.
+  // In questo caso lo Step2 non chiede la risorsa (è già nota — punto 9).
+  const isSeeded = !!seed?.resource || !!seed?.recruitingCandidate;
 
   const [submitConfirmed, setSubmitConfirmed] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -240,7 +337,7 @@ export function ContractWizard({ currentRole, onSave, onCancel, existingProcesse
   };
 
   const handleNext = () => {
-    const errors = validateStep(state.step, state);
+    const errors = validateStep(state.step, state, isSeeded);
     if (errors.length > 0) {
       setValidationErrors(errors);
       return;
@@ -278,7 +375,12 @@ export function ContractWizard({ currentRole, onSave, onCancel, existingProcesse
   /* ── Step title map ── */
   const stepTitles: Record<number, { title: string; subtitle: string }> = {
     1: { title: 'Avvio Richiesta', subtitle: 'Definisci il tipo di operazione, richiedente, unità e progetto' },
-    2: { title: 'Risorsa', subtitle: 'Seleziona la risorsa esistente o inserisci i dati di una nuova' },
+    2: {
+      title: 'Risorsa',
+      subtitle: isSeeded
+        ? 'La risorsa è già associata al processo'
+        : 'Seleziona la risorsa esistente o inserisci i dati di una nuova',
+    },
     3: { title: 'Tipo Contratto', subtitle: 'Scegli la categoria e il tipo contrattuale' },
     4: {
       title: state.modType === 'mod10' ? 'Dettaglio Contratto — MOD10' : 'Dettaglio Contratto — MOD09',
@@ -384,7 +486,7 @@ export function ContractWizard({ currentRole, onSave, onCancel, existingProcesse
       {/* ── Body Step ── */}
       <div className="wizard-body">
         {state.step === 1 && <Step1Avvio state={state} onChange={onChange} />}
-        {state.step === 2 && <Step2Risorsa state={state} onChange={onChange} />}
+        {state.step === 2 && <Step2Risorsa state={state} onChange={onChange} isSeeded={isSeeded} />}
         {state.step === 3 && <Step3Contratto state={state} onChange={onChange} />}
         {state.step === 4 && state.modType === 'mod09' && <Step4Mod09 state={state} onChange={onChange} />}
         {state.step === 4 && state.modType === 'mod10' && <Step4Mod10 state={state} onChange={onChange} />}

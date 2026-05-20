@@ -1,27 +1,15 @@
 import { useState } from 'react';
 import { RESOURCES, RECRUITING_CANDIDATES } from '../../../data/mockData';
+import { avatarColor, initials } from '../../../utils/avatar';
 import type { Resource, RecruitingCandidate } from '../../../types';
 import type { WizardState } from '../ContractWizard';
 
 interface Props {
   state: WizardState;
   onChange: (updates: Partial<WizardState>) => void;
-}
-
-const AVATAR_COLORS = [
-  '#295fa9', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#dc2626',
-];
-
-function avatarColor(name: string): string {
-  let n = 0;
-  for (let i = 0; i < name.length; i++) n += name.charCodeAt(i);
-  return AVATAR_COLORS[n % AVATAR_COLORS.length];
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(' ');
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+  /** Wizard partito da seed (PeopleDirectory o Recruiting): mostra riepilogo
+   *  read-only invece del selettore. */
+  isSeeded?: boolean;
 }
 
 /* ── Nuova Assunzione — ATS Recruiting Panel ─────────────────────────────── */
@@ -421,10 +409,82 @@ function NewResourceForm({
 
 /* ── Main Component ──────────────────────────────────────────────────────── */
 
-export function Step2Risorsa({ state, onChange }: Props) {
+export function Step2Risorsa({ state, onChange, isSeeded }: Props) {
   const [query, setQuery] = useState('');
 
   const { operationType } = state;
+
+  /* seeded mode: risorsa o candidato già fissati al lancio del wizard.
+     Mostriamo un pannello di sola lettura — la selezione è già avvenuta. */
+  if (isSeeded) {
+    if (state.fromRecruiting && state.recruitingCandidateId) {
+      const c = RECRUITING_CANDIDATES.find(x => x.id === state.recruitingCandidateId);
+      if (c) {
+        return (
+          <div>
+            <div className="alert-cmcc info mb-3">
+              <i className="bi bi-lock-fill me-2" />
+              Il processo è stato avviato da <strong>Recruiting</strong>: il candidato è già associato.
+            </div>
+            <div className="card-cmcc" style={{ padding: 18, display: 'flex', gap: 14, alignItems: 'center' }}>
+              <div className="resource-avatar" style={{ background: avatarColor(c.fullName), width: 52, height: 52, fontSize: 16 }}>
+                {initials(c.fullName)}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>
+                  {c.fullName}
+                  <span className="tag tag-green ms-2" style={{ fontSize: 10 }}>
+                    <i className="bi bi-broadcast me-1" />Da Recruiting
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {c.email} &bull; {c.unitCode} &bull; {c.jobCallCode} — {c.jobCallTitle}
+                </div>
+                <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span className="tag tag-amber">{c.proposedQualifica}</span>
+                  <span className="tag tag-blue">{c.proposedContractType}</span>
+                  <span className={c.isEU ? 'tag tag-green' : 'tag tag-amber'}>{c.isEU ? 'EU' : 'Extra-EU'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
+    if (state.resource) {
+      const r = state.resource;
+      return (
+        <div>
+          <div className="alert-cmcc info mb-3">
+            <i className="bi bi-lock-fill me-2" />
+            Il processo è stato avviato da <strong>Anagrafica</strong>: la risorsa è già associata.
+          </div>
+          <div className="card-cmcc" style={{ padding: 18 }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 12 }}>
+              <div className="resource-avatar" style={{ background: avatarColor(r.fullName), width: 52, height: 52, fontSize: 16 }}>
+                {initials(r.fullName)}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{r.fullName}</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {r.email} &bull; {r.unit}
+                </div>
+              </div>
+              <span className={r.isEU ? 'tag tag-green' : 'tag tag-amber'}>{r.isEU ? 'EU' : 'Extra-EU'}</span>
+            </div>
+            <div className="row g-2" style={{ fontSize: 13 }}>
+              <div className="col-md-4"><span style={{ color: '#64748b' }}>CF:</span> <strong style={{ fontFamily: 'monospace' }}>{r.cf}</strong></div>
+              <div className="col-md-4"><span style={{ color: '#64748b' }}>Nascita:</span> <strong>{r.birthDate}</strong></div>
+              <div className="col-md-4"><span style={{ color: '#64748b' }}>Sede:</span> <strong>{r.sede}</strong></div>
+              <div className="col-md-4"><span style={{ color: '#64748b' }}>Contratto:</span> <strong>{r.contractType}</strong></div>
+              <div className="col-md-4"><span style={{ color: '#64748b' }}>CCNL:</span> <strong>{r.ccnl}</strong></div>
+              <div className="col-md-4"><span style={{ color: '#64748b' }}>Scadenza:</span> <strong>{r.endDate ?? 'Tempo Indeterminato'}</strong></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
 
   /* nuova-assunzione: ATS-only panel */
   if (operationType === 'nuova-assunzione') {

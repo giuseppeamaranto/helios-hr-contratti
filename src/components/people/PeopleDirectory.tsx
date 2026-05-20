@@ -1,20 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { RESOURCES } from '../../data/mockData';
+import { avatarColor, initials } from '../../utils/avatar';
 import type { Resource } from '../../types';
-
-// ── Avatar helpers ────────────────────────────────────────────────────────────
-const AVATAR_COLORS = [
-  '#295fa9', '#059669', '#7c3aed', '#dc2626',
-  '#d97706', '#0891b2', '#0f766e', '#be185d',
-];
-function avatarColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffff;
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-}
-function initials(name: string): string {
-  return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function maskCF(cf: string): string {

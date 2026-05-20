@@ -10,8 +10,6 @@ interface Props {
   onNewProcess: () => void;
 }
 
-const UNIT_FILTERS = ['Tutti', 'ICR', 'IESP', 'EIEE', 'IAFES', 'REMHI', 'ASC'];
-
 const OPERATION_FILTERS: { key: string; label: string }[] = [
   { key: 'tutti',            label: 'Tutte le operazioni' },
   { key: 'nuova-assunzione', label: 'Nuova Assunzione' },
@@ -48,6 +46,13 @@ export function ProcessBoard({ processes, currentRole, onViewProcess, onNewProce
   const [unitFilter, setUnitFilter]   = useState<string>('Tutti');
   const [opFilter, setOpFilter]       = useState<string>('tutti');
   const [searchText, setSearchText]   = useState<string>('');
+
+  // Derivo la lista UO dai processi effettivi: così appaiono tutte le UO usate
+  // (ESYDA, CLIVAP, ROFS, GOCO...) e non solo l'elenco hardcoded degli Istituti.
+  const unitFilters = useMemo(
+    () => ['Tutti', ...Array.from(new Set(processes.map(p => p.unitCode).filter(Boolean))).sort()],
+    [processes],
+  );
 
   const filtered = useMemo(() => {
     let list = [...processes];
@@ -118,7 +123,7 @@ export function ProcessBoard({ processes, currentRole, onViewProcess, onNewProce
 
         {/* Unit filters */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {UNIT_FILTERS.map(u => (
+          {unitFilters.map(u => (
             <button
               key={u}
               className={`filter-chip${unitFilter === u ? ' active' : ''}`}

@@ -1,7 +1,7 @@
 import { CURRENT_USER } from '../../data/mockData';
 import type { UserRole } from '../../types';
 
-type View = 'dashboard' | 'process-board' | 'new-process' | 'people' | 'forms' | 'analytics';
+type View = 'dashboard' | 'process-board' | 'wizard-entry' | 'new-process' | 'people' | 'forms' | 'analytics';
 
 interface Props {
   currentView: View;
@@ -16,6 +16,7 @@ interface Props {
 const VIEW_LABELS: Record<View, string> = {
   'dashboard':     'Dashboard',
   'process-board': 'Tutti i Processi',
+  'wizard-entry':  'Nuovo Processo',
   'new-process':   'Nuovo Processo',
   'people':        'Rubrica CMCC',
   'forms':         'Moduli HR',
@@ -23,10 +24,13 @@ const VIEW_LABELS: Record<View, string> = {
 };
 
 const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string }> = {
-  gru:       { label: 'GRU',           color: '#1d4ed8', bg: '#dbeafe' },
-  rs:        { label: 'Resp. Struttura',color: '#92400e', bg: '#fef3c7' },
-  direttore: { label: 'Direttore',     color: '#6d28d9', bg: '#ede9fe' },
-  amm:       { label: 'AMM',           color: '#065f46', bg: '#d1fae5' },
+  gru:        { label: 'HR Admin',       color: '#1d4ed8', bg: '#dbeafe' },
+  rs:         { label: 'Resp. Struttura',color: '#92400e', bg: '#fef3c7' },
+  direttore:  { label: 'Direttore',      color: '#6d28d9', bg: '#ede9fe' },
+  amm:        { label: 'AMM',            color: '#065f46', bg: '#d1fae5' },
+  presidente: { label: 'Presidente',     color: '#b45309', bg: '#fef3c7' },
+  governance: { label: 'Governance',     color: '#a21caf', bg: '#fae8ff' },
+  segreteria: { label: 'Segreteria',     color: '#9333ea', bg: '#f3e8ff' },
 };
 
 export function Header({ currentView, collapsed, onToggle, onRoleChange, currentRole, processId, onDashboard }: Props) {
@@ -70,7 +74,7 @@ export function Header({ currentView, collapsed, onToggle, onRoleChange, current
           </button>
           <ul className="dropdown-menu dropdown-menu-end" style={{ fontSize: 13, minWidth: 180 }}>
             <li><span className="dropdown-item-text text-muted" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>Simula ruolo</span></li>
-            {(['gru', 'rs', 'direttore', 'amm'] as UserRole[]).map(r => (
+            {(['gru', 'rs', 'direttore', 'governance', 'presidente', 'segreteria', 'amm'] as UserRole[]).map(r => (
               <li key={r}>
                 <button className={`dropdown-item${currentRole === r ? ' active' : ''}`} onClick={() => onRoleChange(r)}>
                   <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4, background: ROLE_CONFIG[r].bg, color: ROLE_CONFIG[r].color, marginRight: 8 }}>

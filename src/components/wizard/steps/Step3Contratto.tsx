@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import type { ContractCategory, ContractType } from '../../../types';
 import type { WizardState } from '../ContractWizard';
+import { allowedTargetTypes, decideContractAction, detectResourceCategory, explainRule } from '../../../data/resourceRules';
 
 interface Props {
   state: WizardState;
@@ -32,6 +34,20 @@ const TYPE_INFO: Record<string, { mod: string; note: string }> = {
 };
 
 export function Step3Contratto({ state, onChange }: Props) {
+  // Per operazioni di trasformazione su una risorsa esistente, restringiamo i
+  // tipi destinazione in base al contratto corrente (regole CMCC).
+  const isTransformation = state.operationType === 'trasformazione' && !!state.resource;
+  const isProroga        = state.operationType === 'proroga' && !!state.resource;
+  const resourceCategory = detectResourceCategory(state.resource);
+  const allowedTargets   = isTransformation ? allowedTargetTypes(resourceCategory) : null;
+
+  // Per la proroga il tipo contratto deve coincidere con quello attuale —
+  // non si "trasforma", si estende solo la durata. Calcoliamo il tipo di base.
+  const currentTypeForProroga: ContractType | '' =
+    resourceCategory === 'cococo' ? 'cococo' :
+    resourceCategory === 'subordinato-td' ? 'subordinato-td' :
+    resourceCategory === 'subordinato-ti' ? 'subordinato-ti' : '';
+
   const handleCategoryChange = (cat: ContractCategory) => {
     onChange({
       contractCategory: cat,
@@ -47,8 +63,60 @@ export function Step3Contratto({ state, onChange }: Props) {
     onChange({ contractType: type, modType });
   };
 
+  // È ammessa questa categoria? Per trasformazione filtriamo:
+  // - Da CoCoCo → solo "Subordinato" (gli altri non-subordinati non sono upgrade)
+  // - Da Sub-TD → solo "Subordinato" (upgrade a TI)
+  // - Da Sub-TI → nessuna categoria (nessun upgrade ammesso)
+  const isCategoryAllowed = (cat: ContractCategory): boolean => {
+    if (!isTransformation || !allowedTargets) return true;
+    if (allowedTargets.length === 0) return false;
+    const subordinati: ContractType[] = ['subordinato-td','subordinato-ti','distacco'];
+    const nonSub: ContractType[]      = ['cococo','borsa-studio','tirocinio','consulenza-it','consulenza-es'];
+    return cat === 'subordinato'
+      ? allowedTargets.some(t => subordinati.includes(t))
+      : allowedTargets.some(t => nonSub.includes(t));
+  };
+
+  // È ammesso questo tipo specifico?
+  const isTypeAllowed = (type: ContractType): boolean => {
+    if (!isTransformation || !allowedTargets) return true;
+    return allowedTargets.includes(type);
+  };
+
+  // Per la proroga il tipo è fissato a quello attuale: lo auto-impostiamo
+  // all'apertura del passo (effect post-render, niente side-effect in render).
+  useEffect(() => {
+    if (!isProroga || !currentTypeForProroga) return;
+    if (state.contractType === currentTypeForProroga) return;
+    const cat: ContractCategory = ['cococo','borsa-studio','tirocinio','consulenza-it','consulenza-es']
+      .includes(currentTypeForProroga) ? 'non-subordinato' : 'subordinato';
+    onChange({
+      contractCategory: cat,
+      contractType: currentTypeForProroga,
+      modType: cat === 'non-subordinato' ? 'mod09' : 'mod10',
+    });
+  }, [isProroga, currentTypeForProroga, state.contractType, onChange]);
+
   return (
     <div>
+      {/* Avviso regola contratto attuale (operazione su risorsa esistente) */}
+      {(isTransformation || isProroga) && (
+        <div className="alert-cmcc info mb-3" style={{ fontSize: 12 }}>
+          <i className="bi bi-shield-check me-2" />
+          <strong>Regola contratto:</strong> {explainRule(resourceCategory)}
+        </div>
+      )}
+
+      {/* Proroga: tipo già fissato, niente selezione */}
+      {isProroga ? (
+        <div className="alert-cmcc success mb-4">
+          <i className="bi bi-arrow-repeat me-2" />
+          <strong>Proroga del contratto attuale.</strong> Il tipo contratto rimane invariato:{' '}
+          <span className="tag tag-blue">{currentTypeForProroga.toUpperCase()}</span>
+          {' '}— allo step successivo modificherai solo la data di fine.
+        </div>
+      ) : (
+      <>
       {/* Selezione Categoria */}
       <div className="mb-4">
         <label className="form-label">
@@ -56,36 +124,46 @@ export function Step3Contratto({ state, onChange }: Props) {
         </label>
         <div className="row g-3">
           <div className="col-md-6">
-            <div
-              className={`contract-type-card${state.contractCategory === 'non-subordinato' ? ' active' : ''}`}
-              onClick={() => handleCategoryChange('non-subordinato')}
-              style={{ padding: '20px 16px' }}
-            >
-              <div className="ct-icon">📄</div>
-              <div className="ct-label" style={{ fontSize: 14 }}>Non Subordinato</div>
-              <div className="ct-desc">
-                CO.CO.CO., Borse di Studio, Tirocini, Consulenze
-              </div>
-              <div className="mt-2">
-                <span className="tag tag-blue">MOD09</span>
-              </div>
-            </div>
+            {(() => {
+              const disabled = !isCategoryAllowed('non-subordinato');
+              return (
+                <div
+                  className={`contract-type-card${state.contractCategory === 'non-subordinato' ? ' active' : ''}`}
+                  onClick={() => !disabled && handleCategoryChange('non-subordinato')}
+                  style={{ padding: '20px 16px', opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                  title={disabled ? 'Non ammesso dalle regole di transizione' : undefined}
+                >
+                  <div className="ct-icon">📄</div>
+                  <div className="ct-label" style={{ fontSize: 14 }}>Non Subordinato</div>
+                  <div className="ct-desc">CO.CO.CO., Borse di Studio, Tirocini, Consulenze</div>
+                  <div className="mt-2">
+                    <span className="tag tag-blue">MOD09</span>
+                    {disabled && <span className="tag tag-gray ms-1" style={{ fontSize: 10 }}>non ammesso</span>}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="col-md-6">
-            <div
-              className={`contract-type-card${state.contractCategory === 'subordinato' ? ' active' : ''}`}
-              onClick={() => handleCategoryChange('subordinato')}
-              style={{ padding: '20px 16px' }}
-            >
-              <div className="ct-icon">👔</div>
-              <div className="ct-label" style={{ fontSize: 14 }}>Subordinato</div>
-              <div className="ct-desc">
-                Tempo Determinato, Tempo Indeterminato, Distacco
-              </div>
-              <div className="mt-2">
-                <span className="tag tag-purple">MOD10</span>
-              </div>
-            </div>
+            {(() => {
+              const disabled = !isCategoryAllowed('subordinato');
+              return (
+                <div
+                  className={`contract-type-card${state.contractCategory === 'subordinato' ? ' active' : ''}`}
+                  onClick={() => !disabled && handleCategoryChange('subordinato')}
+                  style={{ padding: '20px 16px', opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                  title={disabled ? 'Non ammesso dalle regole di transizione' : undefined}
+                >
+                  <div className="ct-icon">👔</div>
+                  <div className="ct-label" style={{ fontSize: 14 }}>Subordinato</div>
+                  <div className="ct-desc">Tempo Determinato, Tempo Indeterminato, Distacco</div>
+                  <div className="mt-2">
+                    <span className="tag tag-purple">MOD10</span>
+                    {disabled && <span className="tag tag-gray ms-1" style={{ fontSize: 10 }}>non ammesso</span>}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -100,20 +178,54 @@ export function Step3Contratto({ state, onChange }: Props) {
             {(state.contractCategory === 'non-subordinato'
               ? NON_SUBORDINATO_TYPES
               : SUBORDINATO_TYPES
-            ).map(t => (
-              <div
-                key={t.value}
-                className={`contract-type-card${state.contractType === t.value ? ' active' : ''}`}
-                onClick={() => handleTypeChange(t.value)}
-              >
-                <div className="ct-icon">{t.icon}</div>
-                <div className="ct-label">{t.label}</div>
-                <div className="ct-desc">{t.desc}</div>
-              </div>
-            ))}
+            ).map(t => {
+              const disabled = !isTypeAllowed(t.value);
+              return (
+                <div
+                  key={t.value}
+                  className={`contract-type-card${state.contractType === t.value ? ' active' : ''}`}
+                  onClick={() => !disabled && handleTypeChange(t.value)}
+                  style={{ opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                  title={disabled ? 'Tipo non ammesso dalle regole di transizione' : undefined}
+                >
+                  <div className="ct-icon">{t.icon}</div>
+                  <div className="ct-label">{t.label}</div>
+                  <div className="ct-desc">{t.desc}</div>
+                  {disabled && <div className="mt-1"><span className="tag tag-gray" style={{ fontSize: 10 }}>non ammesso</span></div>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
+      </>
+      )}
+
+      {/* Anteprima decisione contract-action (solo se risorsa esistente + tipo scelto) */}
+      {state.resource && state.contractType && (() => {
+        const newStartDate = state.modType === 'mod10' ? state.mod10.startDate : state.mod09.startDate;
+        const isRenewal = state.modType === 'mod10' ? !!state.mod10.isRinnovo : !!state.mod09.isProroga;
+        const decision = decideContractAction({
+          resource: state.resource,
+          newContractType: state.contractType,
+          newStartDate,
+          isRenewal: isRenewal || state.operationType === 'proroga' && false, // proroga ≠ rinnovo automatico
+        });
+        if (!decision) return null;
+        const isNew = decision.action === 'new-contract';
+        return (
+          <div className={`alert-cmcc ${isNew ? 'warning' : 'success'} mb-3`} style={{ fontSize: 12 }}>
+            <i className={`bi ${isNew ? 'bi-file-earmark-plus' : 'bi-pencil-square'} me-2`} />
+            <strong>{isNew ? 'Verrà creato un NUOVO contratto' : 'MODIFICA del contratto esistente'}</strong>
+            <span className="ms-2">— {decision.reason}</span>
+            {decision.interruptionDays > 0 && (
+              <span className="tag tag-amber ms-2" style={{ fontSize: 10 }}>
+                {decision.interruptionDays} {decision.interruptionDays === 1 ? 'giorno' : 'giorni'} di interruzione
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Info contestuale sul tipo selezionato */}
       {state.contractType && TYPE_INFO[state.contractType] && (

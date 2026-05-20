@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ORG_UNITS } from '../../data/mockData';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ModuloBadge = 'Non Subordinato' | 'Subordinato' | 'Onboarding' | 'Scientifico';
@@ -133,25 +134,24 @@ const MODULI: Modulo[] = [
       { title: 'Accettazione', fields: ['Data presa visione', 'Firma collaboratore'] },
     ],
   },
+  {
+    // MOD05-GRU: citato nel FlowChart CMCC per consulenza/occasionale, ma
+    // gestito in un flusso separato (non in questa app). Mostriamo solo il
+    // riferimento per coerenza con la documentazione GRU.
+    id: 'MOD05',
+    code: 'MOD05',
+    title: 'Richiesta Consulenza / Occasionale (riferimento)',
+    badge: 'Non Subordinato',
+    description: 'Modulo GRU per richieste di consulenza/prestazione occasionale. Gestito in un flusso separato — qui è presente solo come riferimento documentale (vedi FlowChart Processo Contratti HR).',
+    sections: [
+      { title: 'Riferimento esterno', fields: ['Flusso gestito fuori da questa app', 'Vedi: FlowChart.svg — branch "Contratto di Consulenza/Occasionale?"'] },
+    ],
+  },
 ];
 
 // ── Modal: MOD09 ──────────────────────────────────────────────────────────────
-const ORG_UNITS_MOD09 = [
-  'IAFES', 'RAAS', 'REMHI', 'SOWAS', 'SEME', 'ECIP', 'TCT', 'ROFS',
-  'ESYDA', 'GOCO', 'CLIVAP', 'ICR', 'IESP', 'EIEE',
-  'HIGH PERFORMANCE COMPUTING CENTER',
-  'ADVANCED DIGITAL INNOVATION CENTER',
-  'ADVANCED TRAINING AND EDUCATION CENTER',
-  'FUND-RAISING', 'COMMUNICATION & SCIENCE OUTREACH',
-  'GENERAL COUNSEL', 'EXECUTIVE OFFICE', 'PEOPLE & CULTURE',
-  'LEGAL & CONTRACT ADVISORY', 'PUBLIC PROCUREMENT',
-  'INFORMATION TECHNOLOGY', 'ADMINISTRATION & FINANCE',
-  'PROJECT ADMINISTRATION & MANAGEMENT CONTROL', 'FACILITY MGMT & HSE',
-  'Integration of the planetary biogeochemical and industrial carbon cycle',
-  'Predicting socio-economic impacts of climate change',
-  'Global coasts as a new frontier',
-  'Integrating AI and ML in the modeling chain',
-];
+// UO derivate dal master list condiviso (vedi src/data/mockData.ts → ORG_UNITS).
+const ORG_UNITS_MOD09 = ORG_UNITS.map(u => `${u.code} — ${u.name}`);
 
 function ModalMOD09({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({

@@ -1,6 +1,7 @@
-import { CURRENT_USER } from '../../data/mockData';
+import { CURRENT_USER, ROLE_LABELS } from '../../data/mockData';
+import { initials as toInitials } from '../../utils/avatar';
 
-type View = 'dashboard' | 'process-board' | 'new-process' | 'people' | 'forms' | 'analytics';
+type View = 'dashboard' | 'process-board' | 'wizard-entry' | 'new-process' | 'people' | 'forms' | 'analytics';
 
 interface Props {
   currentView: View;
@@ -32,15 +33,8 @@ const NAV = [
   },
 ];
 
-const ROLE_LABELS: Record<string, string> = {
-  gru: 'GRU — HR Team',
-  rs: 'Resp. Struttura',
-  direttore: 'Direttore',
-  amm: 'Amministrazione',
-};
-
 export function Sidebar({ currentView, onViewChange, collapsed }: Props) {
-  const initials = CURRENT_USER.name.split(' ').slice(0, 2).map(w => w[0]).join('');
+  const initials = toInitials(CURRENT_USER.name);
 
   return (
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>

@@ -16,24 +16,43 @@ export type OperationType =
   | 'trasformazione'
   | 'integrazione';
 
+// ── Stati processo allineati al FlowChart CMCC ──────────────────────────────
+// Pipeline a 13 step (incluso 'bozza').
+//   bozza → approvazione-rs → verifica-gru →
+//   approvazione-dir → approvazione-organo  ⟵ skip se requestedAmount < 1000 €
+//                                              e/o non Direzione Scientifica
+//   redazione → anteprima → firma-presidente →
+//   protocollo → applicativi → anagrafica → monitoraggio → completato
+// Le vecchie etichette ('elaborazione-gru', 'lettera-presentazione',
+// 'contratto-preparazione', 'contratto-firma', 'zucchetti') sono mantenute
+// come alias retro-compatibili (verranno mappate nella status-config).
 export type ProcessStatus =
   | 'bozza'
   | 'approvazione-rs'
-  | 'approvazione-dir'
   | 'verifica-gru'
-  | 'elaborazione-gru'
-  | 'contratto-preparazione'
-  | 'lettera-presentazione'
-  | 'contratto-firma'
+  | 'approvazione-dir'
+  | 'approvazione-organo'   // NEW — Comitato Esecutivo / Governance
+  | 'redazione'             // NEW — Redazione contratto (HR Admin)
+  | 'anteprima'             // NEW — Anteprima alla Risorsa
+  | 'firma-presidente'      // NEW — Firma del Presidente
+  | 'protocollo'            // NEW — Protocollo Segreteria
+  | 'applicativi'           // NEW — Inserimento Zucchetti/Helios/SAP
   | 'anagrafica'
-  | 'zucchetti'
+  | 'monitoraggio'          // NEW — Monitoraggio post-firma
   | 'completato'
+  // legacy aliases (manteniamo per non rompere MOCK_PROCESSES vecchi)
+  | 'elaborazione-gru'
+  | 'lettera-presentazione'
+  | 'contratto-preparazione'
+  | 'contratto-firma'
+  | 'zucchetti'
   | 'annullato'
   | 'respinto';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
-export type UserRole = 'rs' | 'gru' | 'direttore' | 'amm';
+// Ruoli simulati: 4 storici + 3 nuovi (Presidente/Governance/Segreteria)
+export type UserRole = 'rs' | 'gru' | 'direttore' | 'amm' | 'presidente' | 'governance' | 'segreteria';
 
 export interface Resource {
   idSubject: string;
@@ -67,7 +86,7 @@ export interface Resource {
 
 export interface Approval {
   id: string;
-  role: 'rs' | 'direttore' | 'gru' | 'amm';
+  role: 'rs' | 'direttore' | 'gru' | 'amm' | 'presidente' | 'governance' | 'segreteria';
   name: string;
   status: ApprovalStatus;
   timestamp?: string;
@@ -213,6 +232,41 @@ export interface ContractProcess {
   mod14Submitted: boolean;
   zucchettiId?: string;
   zucchettiLoaded: boolean;
+  /** Per i nuovi assunti (isNewResource=true): la fase Anagrafica richiede di
+   *  riconciliare il profilo con la collection DossierRisorse (master Zucchetti)
+   *  prima di poter avanzare a Monitoraggio/Completato. */
+  zucchettiReconciled?: boolean;
+
+  // ── FlowChart fields (gating + tracking) ────────────────────────────────
+  /** Importo annuo lordo della richiesta. Sotto i 1000€ saltiamo i gate
+   *  Direttore Esecutivo + Organo di competenza (CE/CdA). */
+  requestedAmount?: number;
+  /** Se true → l'approvazione passa per il Comitato Esecutivo (CE);
+   *  se false → passa per Governance (CdA). */
+  isDirezioneScientifica?: boolean;
+  /** Per contratti subordinati: invio info allo studio esterno (Babbo)
+   *  durante la redazione. Sotto-task non bloccante. */
+  babboSent?: boolean;
+  /** Stato del passaggio "Anteprima alla Risorsa":
+   *  - 'pending'  → in attesa di feedback della risorsa
+   *  - 'changes' → la risorsa ha segnalato modifiche → loop a redazione
+   *  - 'approved' → ok, prosegue verso firma Presidente */
+  previewStatus?: 'pending' | 'changes' | 'approved';
+  /** Eventuali note di modifica dalla risorsa nel passaggio Anteprima. */
+  previewNotes?: string;
+  /** Numero di protocollo assegnato dalla Segreteria. */
+  protocolNumber?: string;
+  /** Data di scadenza monitorata in fase post-firma per future proroghe. */
+  monitoringEndDate?: string;
+
+  /** Regola contract-action CMCC: il processo produce un nuovo contratto
+   *  oppure una modifica al contratto esistente. Calcolato dal wizard in
+   *  base a tipologia/continuità/interruzione/rinnovo. */
+  contractAction?: 'new-contract' | 'modify-contract';
+  /** Motivazione human-readable della decisione contractAction. */
+  contractActionReason?: string;
+  /** Giorni di interruzione fra fine contratto attuale e inizio nuovo. */
+  interruptionDays?: number;
 }
 
 export interface Unit {

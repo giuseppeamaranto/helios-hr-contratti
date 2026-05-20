@@ -1,5 +1,6 @@
 import { MOCK_PROCESSES, STATUS_CONFIG, OPERATION_LABELS, CONTRACT_TYPE_LABELS } from '../../data/mockData';
 import { StatusBadge } from '../ui/StatusBadge';
+import { avatarColor, initials } from '../../utils/avatar';
 import type { ContractProcess } from '../../types';
 
 interface Props {
@@ -7,14 +8,6 @@ interface Props {
   onNewProcess: () => void;
   onViewAll: () => void;
 }
-
-const AVATAR_COLORS = ['#295fa9','#059669','#7c3aed','#dc2626','#d97706','#0891b2','#0f766e'];
-function avatarColor(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffff;
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-}
-function initials(name: string) { return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(); }
 
 const KANBAN_COLS = [
   { key: 'bozza',            label: 'Bozza',              color: '#64748b' },
