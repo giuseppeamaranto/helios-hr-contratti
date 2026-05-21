@@ -217,8 +217,16 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
   // Posizione del popover ancorata alla bounding box dello step cliccato.
   // null → popover renderizzato al centro (fallback).
   const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null);
-  // Ricerca per il pannello di riconciliazione Zucchetti (anagrafica step).
+  // Ricerca per il pannello di riconciliazione Zucchetti.
   const [zucchettiQuery, setZucchettiQuery] = useState('');
+  // Modalità del pannello riconciliazione: 'search' (DossierRisorse) | 'manual' (form anagrafica).
+  const [zucchettiMode, setZucchettiMode] = useState<'search' | 'manual'>('search');
+  // Buffer locale dei campi anagrafica completati in modalità manual
+  // (sincronizzati alla risorsa finale al click "Conferma").
+  const [manualResource, setManualResource] = useState<{
+    fullName?: string; email?: string; cf?: string;
+    birthDate?: string; birthCountry?: string; sede?: string; profession?: string;
+  }>({});
 
   const currentStepIdx = getStepIndex(proc.status);
 
@@ -1152,8 +1160,24 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
             </div>
           )}
 
-          {/* Riconciliazione Zucchetti (solo nuovi assunti in fase anagrafica) */}
-          {proc.isNewResource && !proc.zucchettiReconciled && normalizeStatus(proc.status) === 'anagrafica' && (() => {
+          {/*
+            Pannello riconciliazione Zucchetti — disponibile da `verifica-gru`
+            in poi (non solo anagrafica). Così HR Admin può preparare il
+            collegamento anche prima della firma. Bloccante solo allo step
+            Anagrafica per avanzare. Due modalità:
+              - 'search' → cerca in DossierRisorse e linka una entry esistente
+              - 'manual' → completa i campi anagrafici a mano (utile per ATS
+                con dati parziali o consulenti non ancora in master Zucchetti)
+          */}
+          {proc.isNewResource && !proc.zucchettiReconciled && (() => {
+            const stepsThatShowPanel: ProcessStatus[] = [
+              'verifica-gru','approvazione-dir','approvazione-organo','redazione',
+              'anteprima','firma-presidente','protocollo','applicativi','anagrafica',
+            ];
+            const visible = stepsThatShowPanel.includes(normalizeStatus(proc.status) as ProcessStatus);
+            if (!visible) return null;
+            const isBlocking = normalizeStatus(proc.status) === 'anagrafica';
+
             const candidateName = (proc.newResourceName || '').toLowerCase();
             const baseList = candidateName
               ? RESOURCES.filter(r =>
@@ -1170,102 +1194,224 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
                       || (r.idEmploy || '').toLowerCase().includes(q);
                 })
               : baseList.slice(0, 8);
+
             const reconcileWith = (r: typeof RESOURCES[number]) => {
               const now = new Date().toISOString();
               onUpdate({
-                resourceId: r.idSubject,
-                resource: r,
-                isNewResource: false,
-                zucchettiReconciled: true,
-                updatedAt: now,
+                resourceId: r.idSubject, resource: r, isNewResource: false,
+                zucchettiReconciled: true, updatedAt: now,
                 history: [...proc.history, {
-                  id: `H${proc.history.length + 1}`,
-                  timestamp: now,
+                  id: `H${proc.history.length + 1}`, timestamp: now,
                   action: `Riconciliato con DossierRisorse: ${r.fullName} (matr. ${r.idEmploy})`,
-                  actor: proc.requestedBy,
-                  actorRole: roleLabel(currentRole),
-                  toStatus: proc.status,
+                  actor: proc.requestedBy, actorRole: roleLabel(currentRole), toStatus: proc.status,
                 }],
               });
             };
+
+            const confirmManual = () => {
+              // Costruisce una "Resource pro-forma" dai campi manuali per agganciarla al processo.
+              // Marca zucchettiReconciled=true così Anagrafica può avanzare.
+              const fullName = (manualResource.fullName || proc.newResourceName || '').trim();
+              if (!fullName) return;
+              const [firstName = '', ...rest] = fullName.split(' ');
+              const lastName = rest.join(' ') || firstName;
+              const newId = `MAN-${Date.now().toString(36).toUpperCase()}`;
+              const pro: typeof RESOURCES[number] = {
+                idSubject: newId, idEmploy: `M-${Math.floor(1000 + Math.random() * 9000)}`,
+                fullName, firstName, lastName,
+                email: manualResource.email || proc.newResourceEmail || '',
+                emailPrivate: undefined, sex: 'M',
+                birthDate: manualResource.birthDate || '',
+                birthCountry: manualResource.birthCountry || 'ITALIA',
+                residenceCountry: manualResource.birthCountry || 'ITALIA',
+                cf: manualResource.cf || '',
+                contractType: proc.contractType || '', contractNature: 'Soggetto esterno',
+                unit: proc.unitName || proc.unitCode, unitCode: proc.unitCode || '',
+                sede: manualResource.sede || 'Remoto',
+                profession: manualResource.profession || '', qualProf: '', study: '',
+                isPartTime: false, partTimePercent: 100,
+                startDate: proc.mod09?.startDate || proc.mod10?.startDate || '',
+                endDate: proc.mod09?.endDate || proc.mod10?.endDate || undefined,
+                ccnl: '', ccnlLevel: undefined, isEU: true,
+              };
+              const now = new Date().toISOString();
+              onUpdate({
+                resourceId: newId, resource: pro, isNewResource: false,
+                zucchettiReconciled: true, updatedAt: now,
+                history: [...proc.history, {
+                  id: `H${proc.history.length + 1}`, timestamp: now,
+                  action: `Anagrafica completata manualmente: ${fullName} (matr. ${pro.idEmploy})`,
+                  actor: proc.requestedBy, actorRole: roleLabel(currentRole), toStatus: proc.status,
+                }],
+              });
+            };
+
             return (
               <div
                 className="card-cmcc mb-3"
-                style={{ padding: 14, borderLeft: '4px solid #f1a20e', background: '#fffbeb' }}
+                style={{ padding: 14, borderLeft: `4px solid ${isBlocking ? '#dc2626' : '#f1a20e'}`,
+                         background: isBlocking ? '#fef2f2' : '#fffbeb' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <i className="bi bi-link-45deg" style={{ fontSize: 22, color: '#f1a20e' }} />
+                  <i className="bi bi-link-45deg" style={{ fontSize: 22, color: isBlocking ? '#dc2626' : '#f1a20e' }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>
-                      Riconciliazione con Zucchetti
-                      <span className="tag tag-amber ms-2" style={{ fontSize: 10 }}>Richiesto</span>
+                      Riconciliazione con Zucchetti / Anagrafica
+                      <span className={`tag ${isBlocking ? 'tag-red' : 'tag-amber'} ms-2`} style={{ fontSize: 10 }}>
+                        {isBlocking ? 'Richiesto per avanzare' : 'Disponibile (raccomandato)'}
+                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: '#64748b' }}>
-                      Il nuovo assunto <strong>{proc.newResourceName ?? '—'}</strong> non è ancora collegato al
-                      master <strong>DossierRisorse</strong>. Cerca e seleziona la voce corrispondente
-                      per popolare l'anagrafica e proseguire con il processo.
+                      Il soggetto <strong>{proc.newResourceName ?? '—'}</strong> non è ancora collegato al
+                      master <strong>DossierRisorse</strong>. Puoi cercarlo in Zucchetti (se già presente)
+                      oppure completare manualmente i dati anagrafici.
                     </div>
                   </div>
                 </div>
-                <div className="search-wrapper mb-2">
-                  <i className="bi bi-search" />
-                  <input
-                    type="text"
-                    className="form-control search-input"
-                    placeholder="Cerca in DossierRisorse: nome, email, CF, matricola…"
-                    value={zucchettiQuery}
-                    onChange={e => setZucchettiQuery(e.target.value)}
-                  />
+
+                {/* Toggle modalità */}
+                <div className="d-flex gap-2 mb-3">
+                  <button type="button"
+                    className={`btn btn-sm ${zucchettiMode === 'search' ? 'btn-cmcc-primary' : 'btn-cmcc-ghost'}`}
+                    onClick={() => setZucchettiMode('search')}
+                    style={{ fontSize: 12 }}
+                  >
+                    <i className="bi bi-search me-1" />
+                    Cerca in Zucchetti
+                  </button>
+                  <button type="button"
+                    className={`btn btn-sm ${zucchettiMode === 'manual' ? 'btn-cmcc-primary' : 'btn-cmcc-ghost'}`}
+                    onClick={() => setZucchettiMode('manual')}
+                    style={{ fontSize: 12 }}
+                  >
+                    <i className="bi bi-pencil-square me-1" />
+                    Completa anagrafica manualmente
+                  </button>
                 </div>
-                <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {filtered.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#64748b', padding: 12, textAlign: 'center' }}>
-                      Nessuna corrispondenza trovata.
+
+                {zucchettiMode === 'search' ? (
+                  <>
+                    <div className="search-wrapper mb-2">
+                      <i className="bi bi-search" />
+                      <input
+                        type="text"
+                        className="form-control search-input"
+                        placeholder="Cerca in DossierRisorse: nome, email, CF, matricola…"
+                        value={zucchettiQuery}
+                        onChange={e => setZucchettiQuery(e.target.value)}
+                      />
                     </div>
-                  ) : (
-                    filtered.map(r => (
-                      <div
-                        key={r.idSubject}
-                        className="resource-card"
-                        style={{ cursor: 'pointer', padding: '10px 12px' }}
-                        onClick={() => reconcileWith(r)}
-                      >
-                        <div
-                          className="resource-avatar"
-                          style={{ background: avatarColor(r.fullName), flexShrink: 0, width: 34, height: 34, fontSize: 12 }}
-                        >
-                          {initials(r.fullName)}
+                    <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {filtered.length === 0 ? (
+                        <div style={{ fontSize: 12, color: '#64748b', padding: 12, textAlign: 'center' }}>
+                          Nessuna corrispondenza trovata. Prova a completare manualmente l'anagrafica.
                         </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13 }}>
-                            {r.fullName}
-                            <span style={{ fontSize: 10, color: '#64748b', marginLeft: 8, fontFamily: 'monospace' }}>
-                              matr. {r.idEmploy}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: 11, color: '#64748b' }}>
-                            {r.email} · {r.unitCode} · {r.contractType}
-                          </div>
-                        </div>
-                        <button
-                          className="btn btn-cmcc-primary"
-                          style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
-                          onClick={(e) => { e.stopPropagation(); reconcileWith(r); }}
+                      ) : filtered.map(r => (
+                        <div key={r.idSubject} className="resource-card"
+                          style={{ cursor: 'pointer', padding: '10px 12px' }}
+                          onClick={() => reconcileWith(r)}
                         >
-                          <i className="bi bi-link me-1" />
-                          Collega
-                        </button>
+                          <div className="resource-avatar"
+                            style={{ background: avatarColor(r.fullName), flexShrink: 0, width: 34, height: 34, fontSize: 12 }}>
+                            {initials(r.fullName)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13 }}>
+                              {r.fullName}
+                              <span style={{ fontSize: 10, color: '#64748b', marginLeft: 8, fontFamily: 'monospace' }}>
+                                matr. {r.idEmploy}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>
+                              {r.email} · {r.unitCode} · {r.contractType}
+                            </div>
+                          </div>
+                          <button className="btn btn-cmcc-primary"
+                            style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
+                            onClick={(e) => { e.stopPropagation(); reconcileWith(r); }}
+                          >
+                            <i className="bi bi-link me-1" />
+                            Collega
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="row g-2" style={{ fontSize: 12 }}>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: 11 }}>Nome completo *</label>
+                        <input type="text" className="form-control form-control-sm"
+                          value={manualResource.fullName ?? proc.newResourceName ?? ''}
+                          onChange={e => setManualResource(s => ({ ...s, fullName: e.target.value }))}
+                        />
                       </div>
-                    ))
-                  )}
-                </div>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: 11 }}>Email *</label>
+                        <input type="email" className="form-control form-control-sm"
+                          value={manualResource.email ?? proc.newResourceEmail ?? ''}
+                          onChange={e => setManualResource(s => ({ ...s, email: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label" style={{ fontSize: 11 }}>Codice Fiscale</label>
+                        <input type="text" className="form-control form-control-sm" placeholder="opzionale"
+                          value={manualResource.cf ?? ''}
+                          onChange={e => setManualResource(s => ({ ...s, cf: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label" style={{ fontSize: 11 }}>Data di Nascita</label>
+                        <input type="date" className="form-control form-control-sm"
+                          value={manualResource.birthDate ?? ''}
+                          onChange={e => setManualResource(s => ({ ...s, birthDate: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label" style={{ fontSize: 11 }}>Paese nascita</label>
+                        <input type="text" className="form-control form-control-sm" placeholder="es. ITALIA"
+                          value={manualResource.birthCountry ?? ''}
+                          onChange={e => setManualResource(s => ({ ...s, birthCountry: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: 11 }}>Sede</label>
+                        <input type="text" className="form-control form-control-sm" placeholder="es. Bologna / Remoto"
+                          value={manualResource.sede ?? ''}
+                          onChange={e => setManualResource(s => ({ ...s, sede: e.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: 11 }}>Professione / Qualifica</label>
+                        <input type="text" className="form-control form-control-sm"
+                          value={manualResource.profession ?? ''}
+                          onChange={e => setManualResource(s => ({ ...s, profession: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="d-flex justify-content-end mt-3">
+                      <button className="btn btn-cmcc-primary" style={{ fontSize: 12 }}
+                        onClick={confirmManual}
+                        disabled={!(manualResource.fullName || proc.newResourceName)}
+                      >
+                        <i className="bi bi-check2-circle me-1" />
+                        Conferma anagrafica
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })()}
-          {proc.isNewResource && proc.zucchettiReconciled && proc.resource && normalizeStatus(proc.status) === 'anagrafica' && (
+
+          {/* Conferma visuale post-riconciliazione (mostrato sempre se reconciled) */}
+          {proc.zucchettiReconciled && proc.resource && (
             <div className="alert-cmcc success mb-3" style={{ fontSize: 12 }}>
               <i className="bi bi-check-circle-fill me-2" />
-              Anagrafica <strong>riconciliata</strong> con DossierRisorse (matr. {proc.resource.idEmploy}). Puoi avanzare allo step successivo.
+              Anagrafica <strong>riconciliata</strong> con DossierRisorse (matr. {proc.resource.idEmploy}).
+              {normalizeStatus(proc.status) !== 'monitoraggio' && normalizeStatus(proc.status) !== 'completato' &&
+                ' Puoi avanzare con i prossimi step.'}
             </div>
           )}
 
