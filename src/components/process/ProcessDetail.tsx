@@ -828,6 +828,9 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
             // serve a "revocare" e riportare il processo a quella fase.
             const clickData = getStepClickData(step.status);
             const isClickable = !!clickData;
+            // Pulse animation solo sullo step current per evitare rumore visivo
+            // quando ogni step è cliccabile (jump/halo collidenti).
+            const isCurrentClickable = isClickable && idx === currentStepIdx;
 
             return (
               <div
@@ -846,7 +849,7 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
                   : isClickable ? `Azione: ${clickData!.title}` : undefined
                 }
               >
-                <div className={`step-circle${isClickable ? ' step-circle-clickable' : ''}`}>
+                <div className={`step-circle${isCurrentClickable ? ' step-circle-clickable' : ''}`}>
                   {skipped
                     ? <i className="bi bi-dash" />
                     : stepState === 'done'
