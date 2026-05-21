@@ -5,18 +5,18 @@ import type { RecruitingCandidate, Resource } from '../../types';
 
 interface Props {
   onPickRecruiting: (candidate: RecruitingCandidate) => void;
-  onPickExisting: (resource: Resource) => void;
-  onBlankStart: () => void;
-  onCancel: () => void;
+  onPickExisting:   (resource: Resource) => void;
+  onPickExternal:   () => void;
+  onCancel:         () => void;
 }
 
 type Mode = null | 'recruiting' | 'existing';
 
-export function WizardEntry({ onPickRecruiting, onPickExisting, onBlankStart, onCancel }: Props) {
+export function WizardEntry({ onPickRecruiting, onPickExisting, onPickExternal, onCancel }: Props) {
   const [mode, setMode] = useState<Mode>(null);
   const [query, setQuery] = useState('');
 
-  // ── Step 1: scelta filone ──────────────────────────────────────────────
+  // ── Step 1: scelta del filone ──────────────────────────────────────────
   if (!mode) {
     return (
       <div className="wizard-container">
@@ -35,41 +35,56 @@ export function WizardEntry({ onPickRecruiting, onPickExisting, onBlankStart, on
         <div className="wizard-body" style={{ padding: '24px 28px' }}>
           <div className="alert-cmcc info mb-3">
             <i className="bi bi-info-circle me-2" />
-            Il processo contratti può partire da <strong>due filoni</strong>: una
-            <strong> nuova assunzione</strong> arrivata dal Recruiting (ATS), oppure
-            una <strong>variazione contrattuale</strong> su una risorsa già in anagrafica
-            (proroga, trasformazione, integrazione…).
+            Il processo contratti CMCC parte da <strong>tre filoni</strong>: nuovo assunto dal
+            <strong> Recruiting (ATS)</strong>, variazione contrattuale su <strong>risorsa già in Anagrafica</strong>,
+            oppure <strong>contratto MOD09 diretto</strong> per occasionali/consulenti/borse.
           </div>
 
-          <div className="contract-type-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-            <div className="contract-type-card" onClick={() => setMode('recruiting')} style={{ minHeight: 180 }}>
-              <div className="ct-icon">🎯</div>
+          <div className="contract-type-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+            {/* Card 1: Recruiting */}
+            <div className="contract-type-card" onClick={() => setMode('recruiting')} style={{ minHeight: 220 }}>
+              <div className="ct-icon">📡</div>
               <div className="ct-label">Da Recruiting (ATS)</div>
               <div className="ct-desc">
-                Nuova assunzione: il candidato è stato approvato dalla Job Call.
-                Nome e cognome sono pre-compilati.
+                Nuova assunzione da Job Call approvata. Nome, email, unità
+                pre-compilati dal candidato.
               </div>
-              <div className="mt-2"><span className="tag tag-green">Nuova assunzione</span></div>
+              <div className="mt-2" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <span className="tag tag-blue" style={{ fontSize: 10 }}>CoCoCo</span>
+                <span className="tag tag-purple" style={{ fontSize: 10 }}>Sub. TD</span>
+                <span className="tag tag-purple" style={{ fontSize: 10 }}>Sub. TI</span>
+              </div>
             </div>
-            <div className="contract-type-card" onClick={() => setMode('existing')} style={{ minHeight: 180 }}>
+
+            {/* Card 2: Anagrafica */}
+            <div className="contract-type-card" onClick={() => setMode('existing')} style={{ minHeight: 220 }}>
               <div className="ct-icon">👤</div>
               <div className="ct-label">Da Risorsa in Anagrafica</div>
               <div className="ct-desc">
-                Variazione contrattuale (proroga, trasformazione, integrazione)
-                su una persona già attiva in CMCC.
+                Variazione contrattuale su risorsa attiva: proroga, trasformazione,
+                integrazione (CoCoCo→Sub, TD→TI, …).
               </div>
-              <div className="mt-2">
-                <span className="tag tag-blue">Proroga</span>{' '}
-                <span className="tag tag-purple">Trasformazione</span>
+              <div className="mt-2" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <span className="tag tag-amber" style={{ fontSize: 10 }}>Proroga</span>
+                <span className="tag tag-amber" style={{ fontSize: 10 }}>Trasformazione</span>
+                <span className="tag tag-gray" style={{ fontSize: 10 }}>Integrazione</span>
               </div>
             </div>
-          </div>
 
-          <div className="mt-4" style={{ textAlign: 'center' }}>
-            <button className="btn btn-cmcc-ghost" onClick={onBlankStart} style={{ fontSize: 12 }}>
-              <i className="bi bi-pencil me-2" />
-              Avvia processo in bianco (manuale)
-            </button>
+            {/* Card 3: MOD09 esterno */}
+            <div className="contract-type-card" onClick={onPickExternal} style={{ minHeight: 220 }}>
+              <div className="ct-icon">🌐</div>
+              <div className="ct-label">Nuovo Soggetto Esterno (MOD09)</div>
+              <div className="ct-desc">
+                Contratto MOD09 diretto, senza recruiting. Per prestazioni
+                occasionali, consulenze esterne, borse, tirocini.
+              </div>
+              <div className="mt-2" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <span className="tag tag-blue" style={{ fontSize: 10 }}>Occasionale</span>
+                <span className="tag tag-blue" style={{ fontSize: 10 }}>Consulenza</span>
+                <span className="tag tag-green" style={{ fontSize: 10 }}>Borsa/Tirocinio</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -83,7 +98,7 @@ export function WizardEntry({ onPickRecruiting, onPickExisting, onBlankStart, on
     );
   }
 
-  // ── Step 2: lista candidati o lista risorse, da pickare ─────────────────
+  // ── Step 2: lista candidati o lista risorse ─────────────────────────────
   const isRecruiting = mode === 'recruiting';
   const itemsRecruiting = RECRUITING_CANDIDATES.filter(c => {
     if (!query.trim()) return true;

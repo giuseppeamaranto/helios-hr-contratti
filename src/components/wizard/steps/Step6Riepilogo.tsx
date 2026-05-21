@@ -62,6 +62,15 @@ export function Step6Riepilogo({ state, onConfirmChange, confirmed }: Props) {
           <i className="bi bi-file-earmark-text" />
           Richiesta
         </div>
+        <SummaryRow
+          label="Filone di ingresso"
+          value={
+            state.entryMode === 'recruiting'     ? 'Da Recruiting (ATS)' :
+            state.entryMode === 'existing'       ? 'Da Risorsa in Anagrafica' :
+            state.entryMode === 'external-mod09' ? 'Nuovo Soggetto Esterno (MOD09)' :
+            '—'
+          }
+        />
         <SummaryRow label="Tipo Operazione"  value={OPERATION_LABELS[state.operationType] ?? state.operationType} />
         <SummaryRow label="Richiedente"       value={state.requestedBy} />
         <SummaryRow label="Email Richiedente" value={state.requestedByEmail} />

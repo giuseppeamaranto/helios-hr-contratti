@@ -7,7 +7,8 @@
 //   resource.contractType    = "Tempo determinato" | "Tempo indeterminato" | ...
 //   resource.ccnl            = "Terziario Confcommercio" | "Contratto CO.CO.CO" | ...
 
-import type { ContractType, OperationType, Resource } from '../types';
+import type { ContractProcess, ContractType, OperationType, Resource, WizardEntryMode } from '../types';
+import { CONTRACT_TYPE_MAP, isExternalType } from './contractTypeMapping';
 
 /** Categoria contrattuale corrente della risorsa, derivata dai campi anagrafici. */
 export type ResourceContractCategory =
@@ -101,6 +102,7 @@ export interface ContractActionDecision {
 
 const CATEGORY_OF: Record<string, ResourceContractCategory> = {
   'cococo':           'cococo',
+  'occasionale':      'altro',
   'borsa-studio':     'altro',
   'tirocinio':        'altro',
   'consulenza-it':    'altro',
@@ -109,6 +111,49 @@ const CATEGORY_OF: Record<string, ResourceContractCategory> = {
   'subordinato-ti':   'subordinato-ti',
   'distacco':         'altro',
 };
+
+/** Tipi contrattuali ammessi per filone di ingresso.
+ *  - recruiting     → nuovi assunti CoCoCo + Subordinati TD/TI
+ *  - existing       → tutti (poi filtrato da allowedTargetTypes per trasformazione)
+ *  - external-mod09 → solo MOD09 "esterni": occasionale + consulenze + borse + tirocini
+ */
+export function allowedContractTypesFor(mode: WizardEntryMode): ContractType[] {
+  switch (mode) {
+    case 'recruiting':
+      return ['cococo', 'subordinato-td', 'subordinato-ti'];
+    case 'existing':
+      return Object.keys(CONTRACT_TYPE_MAP) as ContractType[];
+    case 'external-mod09':
+      return (Object.keys(CONTRACT_TYPE_MAP) as ContractType[]).filter(isExternalType);
+  }
+}
+
+/** Tipi ammessi per Step3, combinando filone + (se trasformazione) regole CMCC
+ *  sulla risorsa esistente. */
+export function effectiveAllowedTypes(
+  mode: WizardEntryMode | '',
+  op: OperationType | '',
+  cat: ResourceContractCategory,
+): ContractType[] {
+  if (!mode) return Object.keys(CONTRACT_TYPE_MAP) as ContractType[];
+  const base = allowedContractTypesFor(mode);
+  if (mode === 'existing' && op === 'trasformazione') {
+    const targets = allowedTargetTypes(cat);
+    return base.filter(t => targets.includes(t));
+  }
+  return base;
+}
+
+/** Ricostruisce entryMode da un ContractProcess legacy (senza il nuovo campo). */
+export function deriveEntryMode(p: Pick<ContractProcess,
+  'entryMode' | 'fromRecruiting' | 'isNewResource' | 'resourceId' | 'contractType'
+>): WizardEntryMode {
+  if (p.entryMode) return p.entryMode;
+  if (p.fromRecruiting) return 'recruiting';
+  if (p.resourceId)     return 'existing';
+  if (p.contractType && isExternalType(p.contractType)) return 'external-mod09';
+  return 'existing';
+}
 
 export function decideContractAction(args: {
   resource: Resource | null | undefined;

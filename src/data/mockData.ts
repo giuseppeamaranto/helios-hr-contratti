@@ -1085,6 +1085,7 @@ export const OPERATION_LABELS: Record<string, string> = {
 
 export const CONTRACT_TYPE_LABELS: Record<string, string> = {
   'cococo':           'CO.CO.CO.',
+  'occasionale':      'Coll. Occasionale',
   'borsa-studio':     'Borsa di Studio',
   'tirocinio':        'Tirocinio',
   'consulenza-it':    'Consulenza Italiana',

@@ -22,16 +22,23 @@ const UNITS_BY_GROUP = ORG_UNITS.reduce<Record<string, typeof ORG_UNITS>>((acc, 
 }, {});
 
 export function Step1Avvio({ state, onChange }: Props) {
-  // Quando il wizard è partito da una risorsa già anagrafata, "nuova assunzione"
-  // non ha senso → la nascondiamo dalla griglia operazioni. (punto 10)
-  // Inoltre filtriamo le operazioni in base al contratto attuale della risorsa
-  // (CoCoCo / TD / TI), secondo le regole CMCC in data/resourceRules.ts.
-  const startedFromExistingResource = !!state.resource && !state.fromRecruiting;
+  // Filtraggio operazioni in base al filone di ingresso:
+  //  - recruiting / external-mod09: solo "nuova-assunzione" (auto-impostata)
+  //  - existing: filtrate da allowedOperationsFor(resourceCategory),
+  //              senza "nuova-assunzione"
+  //  - blank: tutte e 4
+  const isRecruiting = state.entryMode === 'recruiting';
+  const isExternal   = state.entryMode === 'external-mod09';
+  const isExisting   = state.entryMode === 'existing';
   const resourceCategory = detectResourceCategory(state.resource);
   const allowedOps = allowedOperationsFor(resourceCategory);
-  const OPERATION_OPTIONS = startedFromExistingResource
-    ? ALL_OPERATIONS.filter(o => o.value !== 'nuova-assunzione' && allowedOps.includes(o.value))
-    : ALL_OPERATIONS;
+  const OPERATION_OPTIONS =
+    isRecruiting || isExternal
+      ? ALL_OPERATIONS.filter(o => o.value === 'nuova-assunzione')
+      : isExisting
+        ? ALL_OPERATIONS.filter(o => o.value !== 'nuova-assunzione' && allowedOps.includes(o.value))
+        : ALL_OPERATIONS;
+  const operationIsLocked = isRecruiting || isExternal;
 
   // PROJECTS è ancorato al codice Istituto (ICR/IESP/EIEE/IAFES/REMHI/ASC).
   // La UO scelta nella dropdown è più granulare (es. ESYDA, ROFS): risolviamo
@@ -67,8 +74,24 @@ export function Step1Avvio({ state, onChange }: Props) {
 
   return (
     <div>
+      {/* Banner contesto filone */}
+      {state.entryMode && (
+        <div
+          className={`alert-cmcc ${isExisting ? 'info' : 'success'} mb-3`}
+          style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          <i className={`bi ${isRecruiting ? 'bi-broadcast' : isExternal ? 'bi-globe2' : 'bi-person-vcard'}`} />
+          <div>
+            <strong>Filone:</strong>{' '}
+            {isRecruiting && <>Nuovo assunto da <strong>Recruiting (ATS)</strong>{state.newResourceName && <> — {state.newResourceName}</>}</>}
+            {isExisting   && <>Variazione su <strong>risorsa in Anagrafica</strong>{state.resource && <> — {state.resource.fullName}</>}</>}
+            {isExternal   && <>Nuovo <strong>soggetto esterno (MOD09)</strong> — Occasionale / Consulenza / Borsa / Tirocinio</>}
+          </div>
+        </div>
+      )}
+
       {/* Avviso regola contratto attuale (solo se partito da risorsa esistente) */}
-      {startedFromExistingResource && (
+      {isExisting && state.resource && (
         <div className="alert-cmcc info mb-3" style={{ fontSize: 12 }}>
           <i className="bi bi-shield-check me-2" />
           <strong>Regola contratto attuale:</strong> {explainRule(resourceCategory)}
@@ -79,13 +102,16 @@ export function Step1Avvio({ state, onChange }: Props) {
       <div className="mb-4">
         <label className="form-label">
           Tipo Operazione <span className="required">*</span>
+          {operationIsLocked && <span className="tag tag-gray ms-2" style={{ fontSize: 10 }}>auto-impostata</span>}
         </label>
         <div className="contract-type-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           {OPERATION_OPTIONS.map(op => (
             <div
               key={op.value}
               className={`contract-type-card${state.operationType === op.value ? ' active' : ''}`}
-              onClick={() => onChange({ operationType: op.value })}
+              onClick={() => !operationIsLocked && onChange({ operationType: op.value })}
+              style={operationIsLocked ? { cursor: 'default', opacity: state.operationType === op.value ? 1 : 0.5 } : undefined}
+              title={operationIsLocked ? 'Auto-impostata dal filone di ingresso' : undefined}
             >
               <div className="ct-icon">{op.icon}</div>
               <div className="ct-label">{OPERATION_LABELS[op.value]}</div>
@@ -93,7 +119,7 @@ export function Step1Avvio({ state, onChange }: Props) {
             </div>
           ))}
         </div>
-        {startedFromExistingResource && OPERATION_OPTIONS.length === 0 && (
+        {isExisting && OPERATION_OPTIONS.length === 0 && (
           <div className="alert-cmcc warning mt-2" style={{ fontSize: 12 }}>
             <i className="bi bi-x-octagon-fill me-2" />
             Nessuna operazione contrattuale disponibile per il tipo di contratto attuale della risorsa.

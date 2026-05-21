@@ -1282,8 +1282,8 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
               />
               {proc.mod138Required && (
                 <ChecklistItem
-                  label="MOD13.8 — Dichiarazione Antimafia"
-                  desc="Richiesta per contratti superiori a soglia normativa"
+                  label="MOD138 — Lettera di Presentazione Personale Scientifico"
+                  desc="Lettera formale di presentazione per personale scientifico"
                   submitted={proc.mod138Submitted}
                   required={true}
                   onToggle={() => toggleMod('mod138Submitted')}
@@ -1587,8 +1587,8 @@ export function ProcessDetail({ process: proc, currentRole, onBack, onUpdate }: 
           />
           {proc.mod138Required && (
             <ChecklistItem
-              label="MOD13.8 inviato"
-              desc="Dichiarazione antimafia"
+              label="MOD138 inviato"
+              desc="Lettera di presentazione personale scientifico"
               submitted={proc.mod138Submitted}
               required={true}
               onToggle={() => toggleMod('mod138Submitted')}

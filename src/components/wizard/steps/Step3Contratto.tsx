@@ -1,7 +1,19 @@
 import { useEffect } from 'react';
 import type { ContractCategory, ContractType } from '../../../types';
 import type { WizardState } from '../ContractWizard';
-import { allowedTargetTypes, decideContractAction, detectResourceCategory, explainRule } from '../../../data/resourceRules';
+import { decideContractAction, detectResourceCategory, effectiveAllowedTypes, explainRule } from '../../../data/resourceRules';
+import { mod09CodeOf } from '../../../data/contractTypeMapping';
+import { RECRUITING_CANDIDATES } from '../../../data/mockData';
+
+/** Mappa proposedContractType (candidato ATS) → ContractType (wizard). */
+function mapProposedToContractType(proposed: string | undefined): ContractType | '' {
+  if (!proposed) return '';
+  const s = proposed.toLowerCase();
+  if (s.includes('coordinata e continuativa') || s.includes('cococo') || s.includes('co.co.co')) return 'cococo';
+  if (s.includes('indeterminato')) return 'subordinato-ti';
+  if (s.includes('determinato'))   return 'subordinato-td';
+  return '';
+}
 
 interface Props {
   state: WizardState;
@@ -10,6 +22,7 @@ interface Props {
 
 const NON_SUBORDINATO_TYPES: { value: ContractType; icon: string; label: string; desc: string }[] = [
   { value: 'cococo',       icon: '🤝', label: 'CO.CO.CO.',           desc: 'Collaborazione Coordinata e Continuativa' },
+  { value: 'occasionale',  icon: '⚡', label: 'Coll. Occasionale',   desc: 'Prestazione autonoma occasionale (no recruiting)' },
   { value: 'borsa-studio', icon: '🎓', label: 'Borsa di Studio',     desc: 'Per laureati e dottorandi, attività di ricerca' },
   { value: 'tirocinio',    icon: '📚', label: 'Tirocinio',           desc: 'Formazione on-the-job, max 6 mesi' },
   { value: 'consulenza-it',icon: '💼', label: 'Consulenza Italiana', desc: 'Professionista con P.IVA italiana' },
@@ -24,6 +37,7 @@ const SUBORDINATO_TYPES: { value: ContractType; icon: string; label: string; des
 
 const TYPE_INFO: Record<string, { mod: string; note: string }> = {
   'cococo':        { mod: 'MOD09', note: 'Richiede modulo MOD09, MOD13 e MOD102 post-attivazione. Contribuzione gestione separata INPS.' },
+  'occasionale':   { mod: 'MOD09', note: 'Prestazione autonoma occasionale: richiede MOD09. Niente MOD138/MOD102 (soggetto esterno).' },
   'borsa-studio':  { mod: 'MOD09', note: 'Richiede modulo MOD09 e MOD13. Esenzione contributi previdenziali.' },
   'tirocinio':     { mod: 'MOD09', note: 'Richiede modulo MOD09. Obbligatoria convenzione con ente formativo.' },
   'consulenza-it': { mod: 'MOD09', note: 'Richiede modulo MOD09. Il professionista deve avere P.IVA attiva.' },
@@ -34,15 +48,18 @@ const TYPE_INFO: Record<string, { mod: string; note: string }> = {
 };
 
 export function Step3Contratto({ state, onChange }: Props) {
-  // Per operazioni di trasformazione su una risorsa esistente, restringiamo i
-  // tipi destinazione in base al contratto corrente (regole CMCC).
   const isTransformation = state.operationType === 'trasformazione' && !!state.resource;
   const isProroga        = state.operationType === 'proroga' && !!state.resource;
   const resourceCategory = detectResourceCategory(state.resource);
-  const allowedTargets   = isTransformation ? allowedTargetTypes(resourceCategory) : null;
 
-  // Per la proroga il tipo contratto deve coincidere con quello attuale —
-  // non si "trasforma", si estende solo la durata. Calcoliamo il tipo di base.
+  // Tipi ammessi = intersezione filone (entryMode) + (se trasformazione) regole CMCC.
+  // Per i casi non-existing, effectiveAllowedTypes ritorna i tipi consentiti dal filone.
+  const allowedTypes = effectiveAllowedTypes(
+    state.entryMode,
+    state.operationType,
+    resourceCategory,
+  );
+
   const currentTypeForProroga: ContractType | '' =
     resourceCategory === 'cococo' ? 'cococo' :
     resourceCategory === 'subordinato-td' ? 'subordinato-td' :
@@ -57,30 +74,23 @@ export function Step3Contratto({ state, onChange }: Props) {
   };
 
   const handleTypeChange = (type: ContractType) => {
-    const modType = ['cococo','borsa-studio','tirocinio','consulenza-it','consulenza-es'].includes(type)
-      ? 'mod09'
-      : 'mod10';
-    onChange({ contractType: type, modType });
+    const mod09Code = mod09CodeOf(type);
+    const modType = mod09Code ? 'mod09' : 'mod10';
+    // Pre-popoliamo anche il codice MOD09 nel Mod09Data per evitare drift
+    // (es. wizard='occasionale' ma form MOD09='COCOCO').
+    onChange({
+      contractType: type,
+      modType,
+      ...(mod09Code ? { mod09: { ...state.mod09, contractTypeMod09: mod09Code } } : {}),
+    });
   };
 
-  // È ammessa questa categoria? Per trasformazione filtriamo:
-  // - Da CoCoCo → solo "Subordinato" (gli altri non-subordinati non sono upgrade)
-  // - Da Sub-TD → solo "Subordinato" (upgrade a TI)
-  // - Da Sub-TI → nessuna categoria (nessun upgrade ammesso)
+  const isTypeAllowed = (type: ContractType): boolean => allowedTypes.includes(type);
   const isCategoryAllowed = (cat: ContractCategory): boolean => {
-    if (!isTransformation || !allowedTargets) return true;
-    if (allowedTargets.length === 0) return false;
-    const subordinati: ContractType[] = ['subordinato-td','subordinato-ti','distacco'];
-    const nonSub: ContractType[]      = ['cococo','borsa-studio','tirocinio','consulenza-it','consulenza-es'];
-    return cat === 'subordinato'
-      ? allowedTargets.some(t => subordinati.includes(t))
-      : allowedTargets.some(t => nonSub.includes(t));
-  };
-
-  // È ammesso questo tipo specifico?
-  const isTypeAllowed = (type: ContractType): boolean => {
-    if (!isTransformation || !allowedTargets) return true;
-    return allowedTargets.includes(type);
+    const types = cat === 'subordinato'
+      ? (['subordinato-td','subordinato-ti','distacco'] as ContractType[])
+      : (['cococo','occasionale','borsa-studio','tirocinio','consulenza-it','consulenza-es'] as ContractType[]);
+    return types.some(t => allowedTypes.includes(t));
   };
 
   // Per la proroga il tipo è fissato a quello attuale: lo auto-impostiamo
@@ -88,7 +98,7 @@ export function Step3Contratto({ state, onChange }: Props) {
   useEffect(() => {
     if (!isProroga || !currentTypeForProroga) return;
     if (state.contractType === currentTypeForProroga) return;
-    const cat: ContractCategory = ['cococo','borsa-studio','tirocinio','consulenza-it','consulenza-es']
+    const cat: ContractCategory = ['cococo','occasionale','borsa-studio','tirocinio','consulenza-it','consulenza-es']
       .includes(currentTypeForProroga) ? 'non-subordinato' : 'subordinato';
     onChange({
       contractCategory: cat,
@@ -96,6 +106,21 @@ export function Step3Contratto({ state, onChange }: Props) {
       modType: cat === 'non-subordinato' ? 'mod09' : 'mod10',
     });
   }, [isProroga, currentTypeForProroga, state.contractType, onChange]);
+
+  // Pre-selezione automatica per recruiting: dal proposedContractType del
+  // candidato, già noto via recruitingCandidateId. L'utente può cambiare.
+  useEffect(() => {
+    if (state.entryMode !== 'recruiting' || state.contractType) return;
+    if (!state.recruitingCandidateId) return;
+    const candidate = RECRUITING_CANDIDATES.find(c => c.id === state.recruitingCandidateId);
+    const mapped = mapProposedToContractType(candidate?.proposedContractType);
+    if (!mapped) return;
+    const cat: ContractCategory = mapped === 'cococo' ? 'non-subordinato' : 'subordinato';
+    handleTypeChange(mapped);
+    onChange({ contractCategory: cat });
+    // handleTypeChange already calls onChange, ma ci serve anche la categoria
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.entryMode, state.contractType, state.recruitingCandidateId]);
 
   return (
     <div>

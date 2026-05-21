@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CURRENT_USER, RECRUITING_CANDIDATES, MOD10_CONTRACT_TYPES } from '../../data/mockData';
-import { decideContractAction } from '../../data/resourceRules';
+import { decideContractAction, effectiveAllowedTypes, detectResourceCategory } from '../../data/resourceRules';
+import { mod09CodeOf } from '../../data/contractTypeMapping';
 import type {
   ContractCategory,
   ContractType,
@@ -12,6 +13,7 @@ import type {
   RecruitingCandidate,
   Resource,
   UserRole,
+  WizardEntryMode,
 } from '../../types';
 import { Step1Avvio } from './steps/Step1Avvio';
 import { Step2Risorsa } from './steps/Step2Risorsa';
@@ -24,6 +26,7 @@ import { Step6Riepilogo } from './steps/Step6Riepilogo';
 /* ── WizardState (exported for child components) ─────────────────────────── */
 export interface WizardState {
   step: number;
+  entryMode: WizardEntryMode | '';
   operationType: OperationType | '';
   requestedBy: string;
   requestedByEmail: string;
@@ -55,12 +58,12 @@ export interface WizardState {
 }
 
 /* ── Props ──────────────────────────────────────────────────────────────── */
-export interface WizardSeed {
-  // Filone "Risorsa esistente" — partito da PeopleDirectory
-  resource?: Resource;
-  // Filone "Recruiting" — partito dal pannello ATS (candidato preselezionato)
-  recruitingCandidate?: RecruitingCandidate;
-}
+// WizardSeed come union discriminato: TS forza un check exhaustive su mode
+// nei consumer, nessuna ambiguità "ho candidate ma anche resource?".
+export type WizardSeed =
+  | { mode: 'recruiting';     candidate: RecruitingCandidate }
+  | { mode: 'existing';       resource:  Resource }
+  | { mode: 'external-mod09' };
 
 interface Props {
   currentRole: UserRole;
@@ -84,6 +87,7 @@ const STEPS = [
 function validateStep(step: number, state: WizardState, seeded: boolean): string[] {
   const errors: string[] = [];
   if (step === 1) {
+    if (!state.entryMode) errors.push('Filone di ingresso non impostato — torna all\'intent picker');
     if (!state.operationType) errors.push('Seleziona il tipo di operazione');
     if (!state.requestedBy.trim()) errors.push('Inserisci il richiedente');
     if (!state.unitCode) errors.push('Seleziona l\'unità organizzativa');
@@ -101,6 +105,16 @@ function validateStep(step: number, state: WizardState, seeded: boolean): string
   if (step === 3) {
     if (!state.contractCategory) errors.push('Seleziona la categoria contrattuale');
     if (!state.contractType) errors.push('Seleziona il tipo di contratto');
+    if (state.entryMode && state.contractType) {
+      const allowed = effectiveAllowedTypes(
+        state.entryMode,
+        state.operationType,
+        detectResourceCategory(state.resource),
+      );
+      if (!allowed.includes(state.contractType)) {
+        errors.push(`Il tipo "${state.contractType}" non è ammesso per il filone selezionato`);
+      }
+    }
   }
   if (step === 4) {
     if (state.modType === 'mod09') {
@@ -153,6 +167,7 @@ function buildProcess(
     createdAt: now,
     updatedAt: now,
     status,
+    entryMode: state.entryMode || undefined,
     operationType: state.operationType as OperationType,
     requestedBy: state.requestedBy,
     requestedByEmail: state.requestedByEmail,
@@ -201,10 +216,15 @@ function buildProcess(
       },
     ],
     mod13Submitted: false,
+    // MOD138/MOD102/MOD14 required only for assunzioni "interne" (recruiting o
+    // anagrafica): per soggetti esterni MOD09 (occasionali, consulenze, borse,
+    // tirocini) la documentazione anagrafica/comunicazione obbligatoria non si
+    // applica.
     mod138Required:
-      state.contractType === 'cococo' || state.contractType === 'subordinato-td',
+      state.entryMode !== 'external-mod09' &&
+      (state.contractType === 'cococo' || state.contractType === 'subordinato-td'),
     mod138Submitted: false,
-    mod102Required: state.contractType === 'cococo',
+    mod102Required: state.entryMode !== 'external-mod09' && state.contractType === 'cococo',
     mod102Submitted: false,
     mod14Required:
       state.contractType === 'subordinato-td' || state.contractType === 'subordinato-ti',
@@ -256,6 +276,7 @@ export function ContractWizard({ currentRole, onSave, onCancel, existingProcesse
   const initial: WizardState = (() => {
     const base: WizardState = {
       step: 1,
+      entryMode: seed?.mode ?? '',
       operationType: '',
       requestedBy: CURRENT_USER.name,
       requestedByEmail: CURRENT_USER.email,
@@ -283,43 +304,53 @@ export function ContractWizard({ currentRole, onSave, onCancel, existingProcesse
       documents: [],
     };
 
-    if (seed?.resource) {
-      const r = seed.resource;
-      // Heuristica: il `unitCode` della risorsa è di solito un Istituto (ICR/IESP/EIEE…).
-      // Lo trasferiamo come default dell'UO. Se l'utente vuole una UO più granulare la cambia.
-      return {
-        ...base,
-        resourceId: r.idSubject,
-        resource: r,
-        isNewResource: false,
-        unitCode: r.unitCode,
-        unitName: r.unit,
-      };
+    if (!seed) return base;
+    switch (seed.mode) {
+      case 'existing': {
+        const r = seed.resource;
+        return {
+          ...base,
+          resourceId: r.idSubject,
+          resource: r,
+          isNewResource: false,
+          unitCode: r.unitCode,
+          unitName: r.unit,
+        };
+      }
+      case 'recruiting': {
+        const c = seed.candidate;
+        return {
+          ...base,
+          operationType: 'nuova-assunzione',
+          fromRecruiting: true,
+          recruitingCandidateId: c.id,
+          jobCallCode: c.jobCallCode,
+          jobCallTitle: c.jobCallTitle,
+          isNewResource: true,
+          newResourceName: c.fullName,
+          newResourceEmail: c.email,
+          unitCode: c.unitCode,
+          unitName: c.unitName,
+        };
+      }
+      case 'external-mod09':
+        // Soggetto esterno: nuova assunzione MOD09 (Occasionale/Consulenza/Borsa/Tirocinio).
+        // I dati del soggetto si raccolgono in Step 2 (search DossierRisorse o inserimento manuale).
+        return {
+          ...base,
+          operationType: 'nuova-assunzione',
+          isNewResource: true,
+          contractCategory: 'non-subordinato',
+          modType: 'mod09',
+        };
     }
-    if (seed?.recruitingCandidate) {
-      const c = seed.recruitingCandidate;
-      return {
-        ...base,
-        operationType: 'nuova-assunzione',
-        fromRecruiting: true,
-        recruitingCandidateId: c.id,
-        jobCallCode: c.jobCallCode,
-        jobCallTitle: c.jobCallTitle,
-        isNewResource: true,
-        newResourceName: c.fullName,
-        newResourceEmail: c.email,
-        unitCode: c.unitCode,
-        unitName: c.unitName,
-      };
-    }
-    return base;
   })();
 
   const [state, setState] = useState<WizardState>(initial);
 
-  // Un wizard è "seeded" se è partito con risorsa o candidato preselezionato.
-  // In questo caso lo Step2 non chiede la risorsa (è già nota — punto 9).
-  const isSeeded = !!seed?.resource || !!seed?.recruitingCandidate;
+  // "Seeded" = lo Step 2 NON chiede di selezionare la risorsa (è già nota dal seed).
+  // Per external-mod09 invece lo Step 2 è attivo (l'utente inserisce/cerca il soggetto).
+  const isSeeded = seed?.mode === 'recruiting' || seed?.mode === 'existing';
 
   const [submitConfirmed, setSubmitConfirmed] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);

@@ -2,6 +2,7 @@ export type ContractCategory = 'non-subordinato' | 'subordinato';
 
 export type ContractType =
   | 'cococo'
+  | 'occasionale'       // MOD09 OCCASIONALE — collaborazione autonoma occasionale
   | 'borsa-studio'
   | 'tirocinio'
   | 'consulenza-it'
@@ -9,6 +10,9 @@ export type ContractType =
   | 'subordinato-td'
   | 'subordinato-ti'
   | 'distacco';
+
+/** Filone di ingresso del wizard. Discriminator unico per UI + filtri tipi. */
+export type WizardEntryMode = 'recruiting' | 'existing' | 'external-mod09';
 
 export type OperationType =
   | 'nuova-assunzione'
@@ -258,6 +262,10 @@ export interface ContractProcess {
   protocolNumber?: string;
   /** Data di scadenza monitorata in fase post-firma per future proroghe. */
   monitoringEndDate?: string;
+
+  /** Filone di ingresso scelto in WizardEntry. Opzionale per retro-compat con
+   *  MOCK_PROCESSES storici (deriveEntryMode lo ricostruisce dai flag legacy). */
+  entryMode?: WizardEntryMode;
 
   /** Regola contract-action CMCC: il processo produce un nuovo contratto
    *  oppure una modifica al contratto esistente. Calcolato dal wizard in

@@ -104,20 +104,32 @@ export function Step4Mod09({ state, onChange }: Props) {
         <div className="col-md-6">
           <label className="form-label">
             Tipologia Contratto <span className="required">*</span>
+            {state.entryMode !== 'external-mod09' && state.contractType && (
+              <span className="tag tag-gray ms-2" style={{ fontSize: 10 }}>derivato da Step 3</span>
+            )}
           </label>
+          {/*
+            Filtro opzioni in base al filone:
+              - external-mod09 → dropdown libera fra OCCASIONALE/CONSULENZA/CONS_EST
+              - recruiting/existing → codice già determinato dalla scelta in Step 3,
+                dropdown read-only con solo quella opzione
+          */}
           <select
             className="form-select"
             value={mod09.contractTypeMod09 ?? ''}
+            disabled={state.entryMode !== 'external-mod09' && !!state.contractType}
             onChange={e =>
               upd({ contractTypeMod09: e.target.value, aliquota: 'piena' })
             }
           >
             <option value="">— Seleziona —</option>
-            {MOD09_CONTRACT_TYPES.map(c => (
-              <option key={c.code} value={c.code}>
-                {c.label}
-              </option>
-            ))}
+            {MOD09_CONTRACT_TYPES
+              .filter(c => state.entryMode !== 'external-mod09' || c.code !== 'COCOCO')
+              .map(c => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))}
           </select>
           {selectedContractType && !isConsulenza && (
             <div className="alert-cmcc info mt-2" style={{ fontSize: 12 }}>

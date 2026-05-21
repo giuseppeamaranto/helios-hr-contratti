@@ -57,7 +57,7 @@ export default function App() {
   const startFromResource = (resourceId: string) => {
     const r = RESOURCES.find(x => x.idSubject === resourceId);
     if (!r) { startNewProcess(); return; }
-    setWizardSeed({ resource: r });
+    setWizardSeed({ mode: 'existing', resource: r });
     setView('new-process');
   };
 
@@ -109,15 +109,15 @@ export default function App() {
           {view === 'wizard-entry' && (
             <WizardEntry
               onPickRecruiting={(c) => {
-                setWizardSeed({ recruitingCandidate: c });
+                setWizardSeed({ mode: 'recruiting', candidate: c });
                 setView('new-process');
               }}
               onPickExisting={(r) => {
-                setWizardSeed({ resource: r });
+                setWizardSeed({ mode: 'existing', resource: r });
                 setView('new-process');
               }}
-              onBlankStart={() => {
-                setWizardSeed(undefined);
+              onPickExternal={() => {
+                setWizardSeed({ mode: 'external-mod09' });
                 setView('new-process');
               }}
               onCancel={() => { setWizardSeed(undefined); setView('process-board'); }}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { RESOURCES, RECRUITING_CANDIDATES } from '../../../data/mockData';
 import { avatarColor, initials } from '../../../utils/avatar';
+import { NewResourceForm } from '../NewResourceForm';
 import type { Resource, RecruitingCandidate } from '../../../types';
 import type { WizardState } from '../ContractWizard';
 
@@ -333,76 +334,137 @@ function ExistingResourcePanel({
   );
 }
 
-/* ── New Resource Manual Form ────────────────────────────────────────────── */
+/* ── External MOD09 Panel — cerca in DossierRisorse o inserisci nuovo ────── */
 
-function NewResourceForm({
+function ExternalMod09Panel({
   state,
   onChange,
 }: {
   state: WizardState;
   onChange: (updates: Partial<WizardState>) => void;
 }) {
+  const [mode, setMode] = useState<'search' | 'manual'>(
+    state.resource ? 'search' : (state.newResourceName ? 'manual' : 'search')
+  );
+  const [query, setQuery] = useState('');
+
+  const filtered = !query.trim() ? [] : RESOURCES.filter(r => {
+    const q = query.toLowerCase();
+    return r.fullName.toLowerCase().includes(q)
+        || r.email.toLowerCase().includes(q)
+        || r.cf.toLowerCase().includes(q)
+        || (r.idEmploy || '').toLowerCase().includes(q);
+  }).slice(0, 12);
+
+  const pickExisting = (r: Resource) => onChange({
+    resourceId: r.idSubject, resource: r, isNewResource: false,
+    newResourceName: '', newResourceEmail: '',
+  });
+  const switchToManual = () => {
+    setMode('manual');
+    onChange({ resourceId: '', resource: null, isNewResource: true });
+  };
+  const switchToSearch = () => {
+    setMode('search');
+    onChange({ resourceId: '', resource: null, isNewResource: false });
+  };
+
   return (
     <div>
-      <div className="alert-cmcc warning mb-3">
-        <i className="bi bi-exclamation-triangle me-2" />
-        Inserisci i dati della nuova risorsa. Il profilo completo sarà creato successivamente dalla GRU.
+      <div className="alert-cmcc info mb-3">
+        <i className="bi bi-globe2 me-2" />
+        <strong>Soggetto esterno (MOD09).</strong> Il soggetto può già essere in DossierRisorse
+        (es. consulente storico) oppure essere completamente nuovo. Scegli come procedere.
       </div>
-      <div className="row g-3">
-        <div className="col-md-6">
-          <label className="form-label">
-            Nome Completo <span className="required">*</span>
-          </label>
-          <input
-            type="text"
-            className="form-control"
-            placeholder="es. Mario Rossi"
-            value={state.newResourceName}
-            onChange={e => onChange({ newResourceName: e.target.value })}
-          />
-        </div>
-        <div className="col-md-6">
-          <label className="form-label">
-            Email <span className="required">*</span>
-          </label>
-          <input
-            type="email"
-            className="form-control"
-            placeholder="es. mario.rossi@cmcc.it"
-            value={state.newResourceEmail}
-            onChange={e => onChange({ newResourceEmail: e.target.value })}
-          />
-        </div>
-        <div className="col-md-4">
-          <label className="form-label">Codice Fiscale</label>
-          <input
-            type="text"
-            className="form-control"
-            placeholder="opzionale"
-            value={state.newResourceCF ?? ''}
-            onChange={e => onChange({ newResourceCF: e.target.value } as Partial<WizardState>)}
-          />
-        </div>
-        <div className="col-md-4">
-          <label className="form-label">Data di Nascita</label>
-          <input
-            type="date"
-            className="form-control"
-            value={state.newResourceBirthDate ?? ''}
-            onChange={e => onChange({ newResourceBirthDate: e.target.value } as Partial<WizardState>)}
-          />
-        </div>
-        <div className="col-md-4">
-          <label className="form-label">Nazionalità</label>
-          <input
-            type="text"
-            className="form-control"
-            placeholder="es. ITALIA"
-            value={state.newResourceNationality ?? ''}
-            onChange={e => onChange({ newResourceNationality: e.target.value } as Partial<WizardState>)}
-          />
-        </div>
+
+      <div className="d-flex gap-2 mb-3">
+        <button
+          type="button"
+          className={`btn ${mode === 'search' ? 'btn-cmcc-primary' : 'btn-cmcc-ghost'}`}
+          onClick={switchToSearch}
+        >
+          <i className="bi bi-search me-2" />
+          Cerca in DossierRisorse
+        </button>
+        <button
+          type="button"
+          className={`btn ${mode === 'manual' ? 'btn-cmcc-primary' : 'btn-cmcc-ghost'}`}
+          onClick={switchToManual}
+        >
+          <i className="bi bi-person-plus me-2" />
+          Inserisci nuovo soggetto
+        </button>
       </div>
+
+      {mode === 'search' ? (
+        <>
+          <div className="search-wrapper mb-3">
+            <i className="bi bi-search" />
+            <input
+              type="text"
+              className="form-control search-input"
+              placeholder="Cerca per nome, email, CF, matricola…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              autoFocus
+            />
+          </div>
+          {state.resource && (
+            <div className="alert-cmcc success mb-3" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="resource-avatar" style={{ background: avatarColor(state.resource.fullName), width: 36, height: 36, fontSize: 13 }}>
+                {initials(state.resource.fullName)}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{state.resource.fullName}</div>
+                <div style={{ fontSize: 11 }}>{state.resource.email} &bull; {state.resource.unit}</div>
+              </div>
+              <button className="btn btn-cmcc-ghost" style={{ fontSize: 12, padding: '4px 10px' }}
+                onClick={() => onChange({ resourceId: '', resource: null })}>
+                Cambia
+              </button>
+            </div>
+          )}
+          <div style={{ maxHeight: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {query.trim() === '' ? (
+              <div className="empty-state" style={{ padding: 24 }}>
+                <div style={{ fontSize: 13, color: '#64748b' }}>
+                  Inizia a digitare per cercare in DossierRisorse.
+                </div>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="empty-state" style={{ padding: 24 }}>
+                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>
+                  Nessuna risorsa trovata per &quot;{query}&quot;.
+                </div>
+                <button className="btn btn-cmcc-primary" style={{ fontSize: 12 }} onClick={switchToManual}>
+                  <i className="bi bi-person-plus me-2" />
+                  Inserisci come nuovo soggetto
+                </button>
+              </div>
+            ) : (
+              filtered.map(r => (
+                <div
+                  key={r.idSubject}
+                  className={`resource-card${state.resourceId === r.idSubject ? ' selected' : ''}`}
+                  onClick={() => pickExisting(r)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="resource-avatar" style={{ background: avatarColor(r.fullName) }}>
+                    {initials(r.fullName)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="resource-name">{r.fullName}</div>
+                    <div className="resource-sub">{r.email} &bull; {r.unitCode} &bull; matr. {r.idEmploy}</div>
+                  </div>
+                  {state.resourceId === r.idSubject && <i className="bi bi-check-circle-fill text-cmcc-blue" style={{ fontSize: 18 }} />}
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      ) : (
+        <NewResourceForm state={state} onChange={onChange} showAlert={false} />
+      )}
     </div>
   );
 }
@@ -486,7 +548,12 @@ export function Step2Risorsa({ state, onChange, isSeeded }: Props) {
     }
   }
 
-  /* nuova-assunzione: ATS-only panel */
+  /* external-mod09: soggetto esterno → search DossierRisorse o inserisci nuovo */
+  if (state.entryMode === 'external-mod09') {
+    return <ExternalMod09Panel state={state} onChange={onChange} />;
+  }
+
+  /* nuova-assunzione (recruiting / ATS): panel candidati */
   if (operationType === 'nuova-assunzione') {
     return (
       <div>
